@@ -14,6 +14,7 @@ from profiles import GameProfile, load_profiles, save_profiles
 from tdp_controller import MAX_TDP, set_tdp
 
 LOG_PATH = Path.home() / ".local" / "share" / "deck-auto-tdp" / "service.log"
+LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 POLL_INTERVAL = SAMPLE_INTERVAL
 
 logging.basicConfig(
@@ -28,7 +29,6 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> None:
-    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     logger.info("deck-auto-tdp started")
 
     profiles = load_profiles()
