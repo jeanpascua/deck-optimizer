@@ -9,9 +9,21 @@ check_ryzenadj() {
     if ! command -v ryzenadj &>/dev/null; then
         echo "ERROR: ryzenadj not found. Install it first:"
         echo "  sudo pacman -S ryzenadj  (SteamOS)"
+        echo "  Or build from source: https://github.com/FlyGoat/RyzenAdj"
         exit 1
     fi
     echo "OK: ryzenadj found at $(command -v ryzenadj)"
+}
+
+set_ryzenadj_permissions() {
+    local bin
+    bin="$(command -v ryzenadj)"
+    if [ "$(stat -c '%u' "$bin")" != "0" ]; then
+        echo "WARNING: ryzenadj not owned by root — skipping setuid"
+        return
+    fi
+    sudo chmod u+s "$bin"
+    echo "OK: ryzenadj setuid set (runs as root without sudo)"
 }
 
 check_gpu_sysfs() {
@@ -42,6 +54,7 @@ install_service() {
 
 echo "=== deck-auto-tdp installer ==="
 check_ryzenadj
+set_ryzenadj_permissions
 check_gpu_sysfs
 install_service
 echo "Done."
