@@ -1,0 +1,14 @@
+[Unit]
+Description=Steam Deck Auto TDP Learner
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/projects/deck-auto-tdp/src/main.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
