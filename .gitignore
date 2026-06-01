@@ -1,0 +1,3 @@
+src/.lean-ctx/
+__pycache__/
+*.pyc
