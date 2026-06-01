@@ -11,6 +11,7 @@ from fps_monitor import SAMPLE_INTERVAL
 from game_detector import get_active_game
 from learner import TDPLearner, CONFIDENCE_PER_SESSION
 from profiles import GameProfile, load_profiles, save_profiles
+from notifier import notify_game_launch
 from tdp_controller import MAX_TDP, MAX_GFXCLK, set_tdp, set_gfxclk
 
 LOG_PATH = Path.home() / ".local" / "share" / "deck-auto-tdp" / "service.log"
@@ -86,6 +87,14 @@ def _on_game_launch(
     else:
         logger.info(f"No profile for '{game_name}' — starting at {MAX_TDP}W")
         initial_tdp = None
+
+    notify_game_launch(
+        game_name=game_name,
+        learned_tdp=profile.learned_tdp,
+        recommended_mode=profile.recommended_mode,
+        confidence=profile.confidence,
+        session_count=profile.session_count,
+    )
 
     return TDPLearner(
         app_id=app_id,
