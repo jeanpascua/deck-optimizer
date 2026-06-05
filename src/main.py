@@ -11,7 +11,7 @@ from fps_monitor import SAMPLE_INTERVAL
 from game_detector import get_active_game
 from learner import TDPLearner, CONFIDENCE_PER_SESSION
 from profiles import GameProfile, load_profiles, save_profiles
-from tdp_controller import MAX_TDP, set_tdp
+from tdp_controller import MAX_TDP, set_tdp, clear_active_tdp
 
 LOG_PATH = Path.home() / ".local" / "share" / "deck-auto-tdp" / "service.log"
 LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -109,6 +109,7 @@ def _on_game_exit(
         f"{learned_tdp}W confidence={existing.confidence:.0%}"
     )
     set_tdp(MAX_TDP)
+    clear_active_tdp()
 
 
 if __name__ == "__main__":

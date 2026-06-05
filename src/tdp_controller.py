@@ -1,11 +1,14 @@
 import logging
 import subprocess
+from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 MIN_TDP = 3.0   # watts
 MAX_TDP = 15.0  # watts
+
+STATE_FILE = Path.home() / ".local" / "share" / "deck-auto-tdp" / "active-tdp"
 
 
 def set_tdp(watts: float) -> bool:
@@ -23,6 +26,8 @@ def set_tdp(watts: float) -> bool:
             capture_output=True,
             timeout=5,
         )
+        STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        STATE_FILE.write_text(str(watts))
         logger.info(f"TDP → {watts}W")
         return True
     except FileNotFoundError:
@@ -34,6 +39,11 @@ def set_tdp(watts: float) -> bool:
     except subprocess.TimeoutExpired:
         logger.error("ryzenadj timed out")
         return False
+
+
+def clear_active_tdp() -> None:
+    if STATE_FILE.exists():
+        STATE_FILE.unlink()
 
 
 def get_current_tdp() -> Optional[float]:
