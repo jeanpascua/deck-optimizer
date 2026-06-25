@@ -1,43 +1,30 @@
 # deck-optimizer
 
-Auto-learning TDP + AI-powered game settings optimizer for Steam Deck. No Decky Loader required.
+AI-powered game settings recommender for Steam Deck. Tells you exactly what to set in the Quick Access Menu for every game — no guessing, no Googling. Powered by community data from SteamDeckHQ + local AI fallback.
 
 ## What it does
 
-Runs as a background service on your Steam Deck. When you launch a game:
+Runs as a background service on your Steam Deck. When you launch a game, it sends a **Discord notification** with the recommended Quick Access Menu settings:
 
-1. Checks for an existing profile
-2. No profile? Scrapes **SteamDeckHQ** for community-tested settings
-3. No community data? **AI predicts** optimal settings using a local LLM
-4. **Auto-applies**: TDP, GPU clock, FPS limit, FSR, scaling mode/filter, half rate shading
-5. **Sends Discord notification** with recommended settings (including manual ones like graphics preset)
-6. **Learns during gameplay** — monitors GPU usage and fine-tunes TDP over sessions
-7. Resets everything to defaults when you quit
+- **TDP** — optimal wattage for the game
+- **GPU Clock** — optimal frequency
+- **FPS Limit** — 30/40/60 based on game weight
+- **FSR** — on or off
+- **Scaling Mode/Filter** — fit/fill, fsr/linear/integer
+- **Half Rate Shading** — on or off
+- **Allow Tearing** — on or off
 
-### What's automatic vs manual
+Settings come from two sources:
+- ✅ **SteamDeckHQ** — community-tested, verified by real users
+- 🤖 **AI prediction** — local Ollama model predicts based on game specs when no community data exists
 
-| Setting | Status | How |
-|---|---|---|
-| **TDP** | ✅ Auto-applied in real-time | ryzenadj — set on launch + auto-learns during gameplay |
-| **GPU Clock** | ✅ Auto-applied in real-time | ryzenadj — set on launch, reset on exit |
-| **FPS Limit** | 📋 Recommended via Discord | Set in Quick Access Menu (can't be set programmatically) |
-| **FSR** | 📋 Recommended via Discord | Set in Quick Access Menu |
-| **Scaling Filter** | 📋 Recommended via Discord | Set in Quick Access Menu |
-| **Scaling Mode** | 📋 Recommended via Discord | Set in Quick Access Menu |
-| **Half Rate Shading** | 📋 Recommended via Discord | Set in Quick Access Menu |
-| **Allow Tearing** | 📋 Recommended via Discord | Set in Quick Access Menu |
-| **Graphics preset** | 📋 Recommended via Discord | Set in-game |
-| **Shadows / AA / Textures** | 📋 Recommended via Discord | Set in-game |
-| **Proton version** | 📋 Recommended via Discord | Set in game properties |
-
-**Why can't everything be automated?** Steam's Quick Access Menu settings are stored in an internal binary format that can't be modified externally. In-game graphics settings are different for every game engine. TDP and GPU clock are the only settings that can be changed at the hardware level while a game is running — and that's where the biggest impact is.
+You apply the settings yourself via the Quick Access Menu (`...` button). Steam's Quick Access settings are stored in an internal binary format that can't be modified programmatically — this is why tools like Decky Loader exist as plugins inside Steam itself.
 
 ## Requirements
 
 ### On the Steam Deck
 - SteamOS
 - Python 3.10+
-- [ryzenadj](https://github.com/FlyGoat/RyzenAdj) (see install instructions below)
 
 ### On your PC (for AI optimizer)
 - Python 3.10+
