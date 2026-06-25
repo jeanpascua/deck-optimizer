@@ -25,6 +25,10 @@ class GameProfile:
     antialiasing: Optional[str] = None
     textures: Optional[str] = None
     half_rate_shading: Optional[bool] = None
+    allow_tearing: Optional[bool] = None
+    disable_frame_limit: Optional[bool] = None
+    scaling_mode: Optional[str] = None
+    scaling_filter: Optional[str] = None
     proton: Optional[str] = None
     settings_source: Optional[str] = None
 

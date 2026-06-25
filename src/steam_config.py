@@ -43,13 +43,37 @@ def set_launch_options(app_id: str, options: str) -> bool:
     return True
 
 
-def build_launch_options(fsr: bool = False, extra: str = "") -> str:
-    parts = []
+def build_launch_options(
+    fsr: bool = False,
+    half_rate_shading: bool = False,
+    allow_tearing: bool = False,
+    disable_frame_limit: bool = False,
+    fps_limit: Optional[int] = None,
+    scaling_mode: Optional[str] = None,
+    scaling_filter: Optional[str] = None,
+) -> str:
+    env_vars = []
+    gamescope_args = []
+
     if fsr:
-        parts.append("WINE_FULLSCREEN_FSR=1")
-    if extra:
-        parts.append(extra)
-    parts.append("%command%")
+        env_vars.append("WINE_FULLSCREEN_FSR=1")
+    if half_rate_shading:
+        env_vars.append("RADV_PERFTEST=gpl")
+    if allow_tearing:
+        env_vars.append("STEAM_GAMESCOPE_VR_TEARING=1")
+    if fps_limit:
+        env_vars.append(f"MANGOHUD_CONFIG=fps_limit={fps_limit}")
+    if disable_frame_limit:
+        env_vars.append("STEAM_GAMESCOPE_DISABLE_FRAMELIMIT=1")
+
+    # Scaling filter: auto, integer, nearest, linear, fsr, nis
+    if scaling_filter:
+        env_vars.append(f"STEAM_GAMESCOPE_SCALING_FILTER={scaling_filter}")
+    # Scaling mode: auto, integer, fit, fill, stretch
+    if scaling_mode:
+        env_vars.append(f"STEAM_GAMESCOPE_SCALING_MODE={scaling_mode}")
+
+    parts = env_vars + ["%command%"]
     return " ".join(parts)
 
 

@@ -76,7 +76,11 @@ FPS limit guidelines:
 - Allowed values: 15, 30, 40, 60 (LCD model, 60Hz max)
 
 FSR: enable for demanding 3D games running below native res. Disable for 2D/pixel art/native-res games.
-Half Rate Shading: enable only for very demanding games as last resort.
+Half Rate Shading: enable only for very demanding games as last resort, introduces visual artifacts.
+Allow Tearing: enable for competitive/fast-paced games where input latency matters more than visual smoothness. Disable for casual/story games.
+Disable Frame Limit: almost always false. Only true for benchmarking.
+Scaling Mode: "fit" for most games (preserves aspect ratio). "fill" for games that support ultrawide. "stretch" rarely.
+Scaling Filter: "fsr" when FSR is on. "linear" for 2D/pixel games. "integer" for retro pixel art. "nearest" for sharp pixels.
 
 Game: {game_name}
 Steam info: {json.dumps(steam_info, indent=2) if steam_info else 'unavailable'}
@@ -89,6 +93,10 @@ Output ONLY valid JSON. Give single values, NOT ranges:
   "fps_limit": <15 or 30 or 40 or 60>,
   "fsr": <true/false>,
   "half_rate_shading": <true/false>,
+  "allow_tearing": <true/false>,
+  "disable_frame_limit": <true/false>,
+  "scaling_mode": "<auto/fit/fill/stretch>",
+  "scaling_filter": "<linear/fsr/nis/integer/nearest>",
   "graphics_preset": "<low/medium/high>",
   "resolution": "1280x800",
   "shadows": "<off/low/medium/high>",

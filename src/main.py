@@ -96,9 +96,18 @@ def _on_game_launch(
         set_gpu_clock(int(profile.gpu_clock))
     if profile.target_fps:
         set_fps_limit(profile.target_fps)
-    if profile.fsr is not None:
-        opts = build_launch_options(fsr=profile.fsr)
-        set_launch_options(app_id, opts)
+
+    opts = build_launch_options(
+        fsr=bool(profile.fsr),
+        half_rate_shading=bool(profile.half_rate_shading),
+        allow_tearing=bool(profile.allow_tearing),
+        disable_frame_limit=bool(profile.disable_frame_limit),
+        fps_limit=profile.target_fps,
+        scaling_mode=profile.scaling_mode,
+        scaling_filter=profile.scaling_filter,
+    )
+    set_launch_options(app_id, opts)
+
     if profile.proton:
         set_proton_version(app_id, profile.proton)
 
@@ -183,7 +192,9 @@ def _get_initial_settings(
 
 def _apply_settings(profile: GameProfile, settings: dict) -> None:
     for field in ["gpu_clock", "fsr", "graphics_preset", "resolution",
-                   "shadows", "antialiasing", "textures", "half_rate_shading", "proton"]:
+                   "shadows", "antialiasing", "textures", "half_rate_shading",
+                   "allow_tearing", "disable_frame_limit", "scaling_mode",
+                   "scaling_filter", "proton"]:
         val = settings.get(field)
         if val is not None:
             setattr(profile, field, val)
