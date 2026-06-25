@@ -136,31 +136,31 @@ def _notify_discord(game_name: str, profile: GameProfile) -> None:
     try:
         webhook = WEBHOOK_FILE.read_text().strip()
         source = profile.settings_source or "no profile"
-        icon = {"community": "✅", "ai": "🤖"}.get(source, "❓")
+        source_label = {"community": "Community Tested ✅", "ai": "AI Predicted 🤖"}.get(source, "No Profile ❓")
+        color = {"community": 0x2ECC71, "ai": 0x3498DB}.get(source, 0x95A5A6)
 
-        lines = [f"🎮 **Now Playing: {game_name}** ({icon} {source})"]
+        fps = profile.target_fps or "—"
+        tdp = f"{profile.learned_tdp}W" if profile.learned_tdp else "—"
+        gpu = f"{profile.gpu_clock} MHz" if profile.gpu_clock else "—"
+        scaling_filter = profile.scaling_filter or ("FSR" if profile.fsr else "—")
 
-        settings = []
-        fps = profile.target_fps or "default"
-        settings.append(f"Frame Limit: **{fps}**")
-        settings.append(f"Disable Frame Limit: **{'on' if profile.disable_frame_limit else 'off'}**")
-        settings.append(f"Allow Tearing: **{'on' if profile.allow_tearing else 'off'}**")
-        settings.append(f"Half Rate Shading: **{'on' if profile.half_rate_shading else 'off'}**")
-        tdp = f"{profile.learned_tdp}W" if profile.learned_tdp else "default"
-        settings.append(f"TDP Limit: **{tdp}**")
-        gpu = f"{profile.gpu_clock}MHz" if profile.gpu_clock else "default"
-        settings.append(f"Manual GPU Clock: **{gpu}**")
-        settings.append(f"Scaling Mode: **{profile.scaling_mode or 'auto'}**")
-        fsr = profile.scaling_filter or ("fsr" if profile.fsr else "auto")
-        settings.append(f"Scaling Filter: **{fsr}**")
+        embed = {
+            "title": f"🎮 {game_name}",
+            "color": color,
+            "fields": [
+                {"name": "Frame Limit", "value": f"`{fps}`", "inline": True},
+                {"name": "Disable Frame Limit", "value": f"`{'on' if profile.disable_frame_limit else 'off'}`", "inline": True},
+                {"name": "Allow Tearing", "value": f"`{'on' if profile.allow_tearing else 'off'}`", "inline": True},
+                {"name": "Half Rate Shading", "value": f"`{'on' if profile.half_rate_shading else 'off'}`", "inline": True},
+                {"name": "TDP Limit", "value": f"`{tdp}`", "inline": True},
+                {"name": "Manual GPU Clock", "value": f"`{gpu}`", "inline": True},
+                {"name": "Scaling Mode", "value": f"`{profile.scaling_mode or 'auto'}`", "inline": True},
+                {"name": "Scaling Filter", "value": f"`{scaling_filter}`", "inline": True},
+            ],
+            "footer": {"text": f"Source: {source_label} • Sessions: {profile.session_count}"},
+        }
 
-        if profile.settings_source:
-            lines.append("\n".join(settings))
-        else:
-            lines.append("No recommendations yet — run `sync_deck.py` from PC")
-
-        msg = "\n".join(lines)
-        payload = json.dumps({"content": msg})
+        payload = json.dumps({"embeds": [embed]})
         subprocess.run(
             ["curl", "-fsS", "-X", "POST", webhook,
              "-H", "Content-Type: application/json",
