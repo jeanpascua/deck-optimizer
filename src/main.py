@@ -2,9 +2,9 @@
 import json
 import logging
 import os
+import subprocess
 import sys
 import time
-import urllib.request
 from pathlib import Path
 from typing import Optional
 
@@ -146,9 +146,13 @@ def _notify_discord(game_name: str, profile: GameProfile) -> None:
             lines.append(f"Confidence: **{profile.confidence:.0%}**")
 
         msg = " | ".join(lines)
-        data = json.dumps({"content": msg}).encode()
-        req = urllib.request.Request(webhook, data=data, headers={"Content-Type": "application/json"})
-        urllib.request.urlopen(req, timeout=5)
+        payload = json.dumps({"content": msg})
+        subprocess.run(
+            ["curl", "-fsS", "-X", "POST", webhook,
+             "-H", "Content-Type: application/json",
+             "-d", payload],
+            capture_output=True, timeout=10,
+        )
         logger.info(f"Discord notified for '{game_name}'")
     except Exception as e:
         logger.warning(f"Discord notification failed: {e}")
