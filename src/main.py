@@ -143,7 +143,7 @@ def _notify_discord(game_name: str, profile: GameProfile) -> None:
         fps = profile.target_fps or "—"
         tdp = f"{profile.learned_tdp}W" if profile.learned_tdp else "—"
         gpu = f"{profile.gpu_clock} MHz" if profile.gpu_clock else "—"
-        scaling_filter = profile.scaling_filter or ("FSR" if profile.fsr else "—")
+        scaling_filter = profile.scaling_filter or ("sharp" if profile.fsr else "linear")
 
         embed = {
             "title": f"🎮 {game_name}",

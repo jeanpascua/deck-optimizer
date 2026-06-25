@@ -87,8 +87,8 @@ FSR: true ONLY for demanding 3D games. false for 2D/pixel/retro — they run at 
 Half Rate Shading: true ONLY as last resort for heaviest games. false for everything else.
 Allow Tearing: true for competitive/fast-paced. false for casual/story/turn-based.
 Disable Frame Limit: false always unless benchmarking.
-Scaling Mode: "fit" almost always.
-Scaling Filter: "fsr" when FSR on. "linear" for 2D. "integer" for pixel art retro games.
+Scaling Mode options: auto, integer, fit, stretch, fill. Use "fit" for most games. "integer" for pixel art. "stretch" or "fill" rarely.
+Scaling Filter (Steam Deck LCD labels): "sharp" for 3D games (FSR/NIS upscaling). "linear" for most games. "pixel" for retro/pixel art.
 
 Game: {game_name}
 Steam info: {json.dumps(steam_info, indent=2) if steam_info else 'unavailable'}
@@ -103,8 +103,8 @@ Output ONLY valid JSON. Give single values, NOT ranges:
   "half_rate_shading": <true/false>,
   "allow_tearing": <true/false>,
   "disable_frame_limit": <true/false>,
-  "scaling_mode": "<auto/fit/fill/stretch>",
-  "scaling_filter": "<linear/fsr/nis/integer/nearest>",
+  "scaling_mode": "<auto/integer/fit/stretch/fill>",
+  "scaling_filter": "<linear/pixel/sharp>",
   "graphics_preset": "<low/medium/high>",
   "resolution": "1280x800",
   "shadows": "<off/low/medium/high>",
