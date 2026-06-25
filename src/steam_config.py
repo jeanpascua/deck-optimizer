@@ -23,24 +23,51 @@ def _find_localconfig() -> Optional[Path]:
     return None
 
 
+ENV_DIR = Path.home() / ".config" / "deck-optimizer" / "env"
+
+
 def set_launch_options(app_id: str, options: str) -> bool:
     cfg = _find_localconfig()
-    if not cfg:
-        logger.warning("localconfig.vdf not found")
-        return False
+    if cfg:
+        text = cfg.read_text(errors="replace")
+        apps_pattern = rf'("{app_id}".*?"LaunchOptions"\s+")(.*?)(")'
+        if re.search(apps_pattern, text, re.DOTALL):
+            text = re.sub(apps_pattern, rf'\g<1>{options}\3', text, flags=re.DOTALL)
+            cfg.write_text(text)
+            logger.info(f"Set launch options for {app_id}: {options}")
+            return True
 
-    text = cfg.read_text(errors="replace")
-
-    apps_pattern = rf'("{app_id}".*?"LaunchOptions"\s+")(.*?)(")'
-    if re.search(apps_pattern, text, re.DOTALL):
-        text = re.sub(apps_pattern, rf'\g<1>{options}\3', text, flags=re.DOTALL)
-    else:
-        logger.info(f"No existing LaunchOptions for {app_id}, skipping (set manually first)")
-        return False
-
-    cfg.write_text(text)
-    logger.info(f"Set launch options for {app_id}: {options}")
+    _write_env_file(app_id, options)
     return True
+
+
+def _write_env_file(app_id: str, options: str) -> None:
+    ENV_DIR.mkdir(parents=True, exist_ok=True)
+    env_file = ENV_DIR / f"{app_id}.env"
+    env_vars = {}
+    for part in options.split():
+        if "=" in part and part != "%command%":
+            k, v = part.split("=", 1)
+            env_vars[k] = v
+
+    lines = [f"export {k}={v}" for k, v in env_vars.items()]
+    env_file.write_text("\n".join(lines) + "\n")
+    logger.info(f"Wrote env file for {app_id}: {env_vars}")
+
+
+def apply_env_for_game(app_id: str) -> None:
+    env_file = ENV_DIR / f"{app_id}.env"
+    if not env_file.exists():
+        return
+    import os
+    for line in env_file.read_text().splitlines():
+        line = line.strip()
+        if line.startswith("export "):
+            line = line[7:]
+        if "=" in line:
+            k, v = line.split("=", 1)
+            os.environ[k] = v
+            logger.info(f"Applied env: {k}={v}")
 
 
 def build_launch_options(

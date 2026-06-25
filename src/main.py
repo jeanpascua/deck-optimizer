@@ -15,7 +15,7 @@ from game_detector import get_active_game
 from learner import TDPLearner, CONFIDENCE_PER_SESSION
 from profiles import GameProfile, load_profiles, save_profiles
 from tdp_controller import MAX_TDP, set_tdp, clear_active_tdp, set_gpu_clock, clear_gpu_clock, set_fps_limit, clear_fps_limit
-from steam_config import build_launch_options, set_launch_options, set_proton_version
+from steam_config import build_launch_options, set_launch_options, set_proton_version, apply_env_for_game
 try:
     from optimizer.scraper import get_community_settings
     from optimizer.ai_predict import predict_settings
@@ -110,6 +110,7 @@ def _on_game_launch(
         scaling_filter=profile.scaling_filter,
     )
     set_launch_options(app_id, opts)
+    apply_env_for_game(app_id)
 
     if profile.proton:
         set_proton_version(app_id, profile.proton)
