@@ -157,7 +157,7 @@ def _notify_discord(game_name: str, profile: GameProfile) -> None:
                 {"name": "Manual GPU Clock", "value": f"`{gpu}`", "inline": True},
                 {"name": "Scaling Mode", "value": f"`{profile.scaling_mode or 'auto'}`", "inline": True},
                 {"name": "Scaling Filter", "value": f"`{scaling_filter}`", "inline": True},
-            ],
+            ] + ([{"name": "⚠️ Proton", "value": f"`{profile.proton}`", "inline": False}] if profile.proton else []),
             "footer": {"text": f"Source: {source_label} • Sessions: {profile.session_count}"},
         }
 
