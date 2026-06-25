@@ -14,7 +14,7 @@ from fps_monitor import SAMPLE_INTERVAL
 from game_detector import get_active_game
 from learner import TDPLearner, CONFIDENCE_PER_SESSION
 from profiles import GameProfile, load_profiles, save_profiles
-from tdp_controller import MAX_TDP, set_tdp, clear_active_tdp
+from tdp_controller import MAX_TDP, set_tdp, clear_active_tdp, set_gpu_clock, clear_gpu_clock, set_fps_limit, clear_fps_limit
 try:
     from optimizer.scraper import get_community_settings
     from optimizer.ai_predict import predict_settings
@@ -90,6 +90,11 @@ def _on_game_launch(
         initial_tdp = profile.learned_tdp
     else:
         initial_tdp = _get_initial_settings(app_id, game_name, profile, profiles)
+
+    if profile.gpu_clock:
+        set_gpu_clock(int(profile.gpu_clock))
+    if profile.target_fps:
+        set_fps_limit(profile.target_fps)
 
     _notify_discord(game_name, profile)
     return TDPLearner(initial_tdp=initial_tdp)
@@ -205,6 +210,8 @@ def _on_game_exit(
         f"{learned_tdp}W confidence={existing.confidence:.0%}"
     )
     set_tdp(MAX_TDP)
+    clear_gpu_clock()
+    clear_fps_limit()
     clear_active_tdp()
 
 

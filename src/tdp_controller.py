@@ -5,10 +5,14 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-MIN_TDP = 3.0   # watts
+MIN_TDP = 4.0   # watts
 MAX_TDP = 15.0  # watts
+MIN_GPU_CLOCK = 200   # MHz
+MAX_GPU_CLOCK = 1600  # MHz
 
-STATE_FILE = Path.home() / ".local" / "share" / "deck-auto-tdp" / "active-tdp"
+STATE_FILE = Path.home() / ".local" / "share" / "deck-optimizer" / "active-tdp"
+GPU_CLOCK_PATH = Path("/sys/class/drm/card0/device/pp_od_clk_voltage")
+FPS_LIMIT_PATH = Path.home() / ".local" / "share" / "deck-optimizer" / "active-fps"
 
 
 def set_tdp(watts: float) -> bool:
@@ -38,6 +42,72 @@ def set_tdp(watts: float) -> bool:
         return False
     except subprocess.TimeoutExpired:
         logger.error("ryzenadj timed out")
+        return False
+
+
+def set_gpu_clock(mhz: int) -> bool:
+    mhz = max(MIN_GPU_CLOCK, min(MAX_GPU_CLOCK, mhz))
+    try:
+        subprocess.run(
+            ["ryzenadj", f"--gfx-clk={mhz}"],
+            check=True, capture_output=True, timeout=5,
+        )
+        logger.info(f"GPU clock → {mhz}MHz")
+        return True
+    except FileNotFoundError:
+        logger.error("ryzenadj not found")
+        return False
+    except subprocess.CalledProcessError as e:
+        logger.error(f"GPU clock set failed: {e.stderr.decode()}")
+        return False
+    except subprocess.TimeoutExpired:
+        logger.error("ryzenadj timed out")
+        return False
+
+
+def clear_gpu_clock() -> bool:
+    try:
+        subprocess.run(
+            ["ryzenadj", f"--gfx-clk={MAX_GPU_CLOCK}"],
+            check=True, capture_output=True, timeout=5,
+        )
+        logger.info(f"GPU clock reset to {MAX_GPU_CLOCK}MHz")
+        return True
+    except Exception:
+        return False
+
+
+def set_fps_limit(fps: int) -> bool:
+    allowed = [0, 15, 30, 40, 60]
+    if fps not in allowed:
+        fps = min(allowed, key=lambda x: abs(x - fps))
+    try:
+        env_file = Path.home() / ".local" / "share" / "deck-optimizer" / "gamescope-fps"
+        env_file.parent.mkdir(parents=True, exist_ok=True)
+        env_file.write_text(str(fps))
+        subprocess.run(
+            ["mangohud-control", "set", f"fps_limit={fps}"],
+            capture_output=True, timeout=5,
+        )
+        logger.info(f"FPS limit → {fps}")
+        return True
+    except FileNotFoundError:
+        logger.debug("mangohud-control not found, FPS limit saved for manual apply")
+        return False
+    except Exception as e:
+        logger.warning(f"FPS limit failed: {e}")
+        return False
+
+
+def clear_fps_limit() -> bool:
+    try:
+        subprocess.run(
+            ["mangohud-control", "set", "fps_limit=0"],
+            capture_output=True, timeout=5,
+        )
+        logger.info("FPS limit cleared")
+        return True
+    except Exception:
         return False
 
 
