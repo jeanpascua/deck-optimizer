@@ -78,6 +78,10 @@ def scrape_settings(review_url: str) -> dict:
             settings[key] = match.group(1).lower()
 
     settings["source"] = review_url
+
+    if settings.get("fps_limit") and settings["fps_limit"] > 60:
+        settings.pop("fps_limit")
+
     return settings
 
 

@@ -90,10 +90,11 @@ def _fetch_settings(
     logger.info(f"New game '{game_name}' — checking community settings...")
     community = get_community_settings(game_name)
 
-    if community and len(community) > 2:
+    useful_keys = [k for k in community if k not in ("source",) and community[k] is not None]
+    if community and len(useful_keys) >= 3:
         profile.settings_source = "community"
         _apply_settings(profile, community)
-        logger.info(f"Community settings found for '{game_name}'")
+        logger.info(f"Community settings found for '{game_name}' ({len(useful_keys)} fields)")
         save_profiles(profiles)
         return
 
