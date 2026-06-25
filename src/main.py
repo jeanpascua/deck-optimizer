@@ -141,25 +141,21 @@ def _notify_discord(game_name: str, profile: GameProfile) -> None:
         lines = [f"🎮 **Now Playing: {game_name}** ({icon} {source})"]
 
         settings = []
-        if profile.learned_tdp:
-            settings.append(f"TDP: {profile.learned_tdp}W")
-        if profile.gpu_clock:
-            settings.append(f"GPU: {profile.gpu_clock}MHz")
-        if profile.target_fps:
-            settings.append(f"FPS: {profile.target_fps}")
-        if profile.fsr is not None:
-            settings.append(f"FSR: {'on' if profile.fsr else 'off'}")
-        if profile.half_rate_shading:
-            settings.append("HRS: on")
-        if profile.allow_tearing:
-            settings.append("Tearing: on")
-        if profile.scaling_mode:
-            settings.append(f"Scale: {profile.scaling_mode}")
-        if profile.scaling_filter:
-            settings.append(f"Filter: {profile.scaling_filter}")
+        fps = profile.target_fps or "default"
+        settings.append(f"Frame Limit: **{fps}**")
+        settings.append(f"Disable Frame Limit: **{'on' if profile.disable_frame_limit else 'off'}**")
+        settings.append(f"Allow Tearing: **{'on' if profile.allow_tearing else 'off'}**")
+        settings.append(f"Half Rate Shading: **{'on' if profile.half_rate_shading else 'off'}**")
+        tdp = f"{profile.learned_tdp}W" if profile.learned_tdp else "default"
+        settings.append(f"TDP Limit: **{tdp}**")
+        gpu = f"{profile.gpu_clock}MHz" if profile.gpu_clock else "default"
+        settings.append(f"Manual GPU Clock: **{gpu}**")
+        settings.append(f"Scaling Mode: **{profile.scaling_mode or 'auto'}**")
+        fsr = profile.scaling_filter or ("fsr" if profile.fsr else "auto")
+        settings.append(f"Scaling Filter: **{fsr}**")
 
-        if settings:
-            lines.append(f"🔧 **Recommended:** {' | '.join(settings)}")
+        if profile.settings_source:
+            lines.append("\n".join(settings))
         else:
             lines.append("No recommendations yet — run `sync_deck.py` from PC")
 
