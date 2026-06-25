@@ -128,26 +128,36 @@ def _notify_discord(game_name: str, profile: GameProfile) -> None:
         icon = {"community": "✅", "ai": "🤖", "learned": "📊"}.get(source, "🎮")
 
         lines = [f"🎮 **Now Playing: {game_name}** ({icon} {source})"]
+
+        auto = []
         if profile.learned_tdp:
-            lines.append(f"TDP: **{profile.learned_tdp}W**")
-        if profile.target_fps:
-            lines.append(f"FPS: **{profile.target_fps}**")
-        if profile.graphics_preset:
-            lines.append(f"Preset: **{profile.graphics_preset}**")
-        if profile.fsr is not None:
-            lines.append(f"FSR: **{'on' if profile.fsr else 'off'}**")
-        if profile.resolution:
-            lines.append(f"Res: **{profile.resolution}**")
-        if profile.shadows:
-            lines.append(f"Shadows: **{profile.shadows}**")
-        if profile.antialiasing:
-            lines.append(f"AA: **{profile.antialiasing}**")
-        if profile.proton:
-            lines.append(f"Proton: **{profile.proton}**")
-        if profile.textures:
-            lines.append(f"Textures: **{profile.textures}**")
+            auto.append(f"TDP: {profile.learned_tdp}W")
+        if profile.gpu_clock:
+            auto.append(f"GPU: {profile.gpu_clock}MHz")
         if profile.confidence > 0:
-            lines.append(f"Confidence: **{profile.confidence:.0%}**")
+            auto.append(f"confidence: {profile.confidence:.0%}")
+        if auto:
+            lines.append(f"⚡ **Auto-applied:** {' | '.join(auto)}")
+
+        manual = []
+        if profile.target_fps:
+            manual.append(f"FPS: {profile.target_fps}")
+        if profile.fsr is not None:
+            manual.append(f"FSR: {'on' if profile.fsr else 'off'}")
+        if profile.graphics_preset:
+            manual.append(f"Preset: {profile.graphics_preset}")
+        if profile.resolution:
+            manual.append(f"Res: {profile.resolution}")
+        if profile.shadows:
+            manual.append(f"Shadows: {profile.shadows}")
+        if profile.antialiasing:
+            manual.append(f"AA: {profile.antialiasing}")
+        if profile.textures:
+            manual.append(f"Textures: {profile.textures}")
+        if profile.proton:
+            manual.append(f"Proton: {profile.proton}")
+        if manual:
+            lines.append(f"🔧 **Set manually:** {' | '.join(manual)}")
 
         msg = " | ".join(lines)
         payload = json.dumps({"content": msg})

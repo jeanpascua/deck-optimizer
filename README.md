@@ -14,26 +14,23 @@ Runs as a background service on your Steam Deck. When you launch a game:
 6. **Learns during gameplay** — monitors GPU usage and fine-tunes TDP over sessions
 7. Resets everything to defaults when you quit
 
-### Auto-applied settings
+### What's automatic vs manual
 
-| Setting | Method |
-|---|---|
-| TDP | ryzenadj (auto-learns optimal value) |
-| GPU Clock | ryzenadj |
-| FPS Limit | MANGOHUD_CONFIG |
-| FSR | WINE_FULLSCREEN_FSR |
-| Scaling Filter | STEAM_GAMESCOPE_SCALING_FILTER |
-| Scaling Mode | STEAM_GAMESCOPE_SCALING_MODE |
-| Half Rate Shading | RADV_PERFTEST |
-| Allow Tearing | STEAM_GAMESCOPE_VR_TEARING |
+| Setting | Status | How |
+|---|---|---|
+| **TDP** | ✅ Auto-applied in real-time | ryzenadj — set on launch + auto-learns during gameplay |
+| **GPU Clock** | ✅ Auto-applied in real-time | ryzenadj — set on launch, reset on exit |
+| **FPS Limit** | 📋 Recommended via Discord | Set in Quick Access Menu (can't be set programmatically) |
+| **FSR** | 📋 Recommended via Discord | Set in Quick Access Menu |
+| **Scaling Filter** | 📋 Recommended via Discord | Set in Quick Access Menu |
+| **Scaling Mode** | 📋 Recommended via Discord | Set in Quick Access Menu |
+| **Half Rate Shading** | 📋 Recommended via Discord | Set in Quick Access Menu |
+| **Allow Tearing** | 📋 Recommended via Discord | Set in Quick Access Menu |
+| **Graphics preset** | 📋 Recommended via Discord | Set in-game |
+| **Shadows / AA / Textures** | 📋 Recommended via Discord | Set in-game |
+| **Proton version** | 📋 Recommended via Discord | Set in game properties |
 
-### Discord notifications
-
-| Setting | Shown in notification |
-|---|---|
-| Graphics preset | Manual apply |
-| Shadows / AA / Textures | Manual apply |
-| Proton version | Manual apply |
+**Why can't everything be automated?** Steam's Quick Access Menu settings are stored in an internal binary format that can't be modified externally. In-game graphics settings are different for every game engine. TDP and GPU clock are the only settings that can be changed at the hardware level while a game is running — and that's where the biggest impact is.
 
 ## Requirements
 
