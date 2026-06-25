@@ -38,7 +38,8 @@ def get_steam_info(app_id: str) -> dict:
     return {}
 
 
-def predict_settings(app_id: str, game_name: str, existing_profiles: dict = None) -> dict:
+def predict_settings(app_id: str, game_name: str, existing_profiles: dict = None,
+                     session_history: list = None, sharedeck_data: dict = None) -> dict:
     steam_info = get_steam_info(app_id)
 
     similar_profiles = ""
@@ -50,6 +51,19 @@ def predict_settings(app_id: str, game_name: str, existing_profiles: dict = None
         ][:10]
         if learned:
             similar_profiles = "Already learned profiles:\n" + "\n".join(learned)
+
+    session_context = ""
+    if session_history:
+        recent = session_history[-3:]
+        session_lines = [
+            f"- GPU avg:{s.get('gpu_busy_avg')}% power:{s.get('power_watts_avg')}W temp:{s.get('temp_c_avg')}°C battery_drain:{s.get('battery_drain_pct')}% duration:{s.get('session_duration_min')}min"
+            for s in recent
+        ]
+        session_context = "Recent play sessions:\n" + "\n".join(session_lines)
+
+    sharedeck_context = ""
+    if sharedeck_data and sharedeck_data.get("report_count"):
+        sharedeck_context = f"ShareDeck community data ({sharedeck_data['report_count']} reports): " + json.dumps({k: v for k, v in sharedeck_data.items() if k not in ('source',)}, indent=2)
 
     prompt = f"""You are a Steam Deck optimization expert. Predict optimal settings for this game.
 
@@ -94,6 +108,8 @@ Sharpness (0-5): only applies when scaling_filter is "sharp". 3 is balanced. 5 i
 Game: {game_name}
 Steam info: {json.dumps(steam_info, indent=2) if steam_info else 'unavailable'}
 {similar_profiles}
+{session_context}
+{sharedeck_context}
 
 Output ONLY valid JSON. Give single values, NOT ranges:
 {{
@@ -132,5 +148,51 @@ Output ONLY valid JSON. Give single values, NOT ranges:
             return settings
     except Exception as e:
         logger.warning(f"AI prediction failed for '{game_name}': {e}")
+
+    return {}
+
+
+def analyze_session(app_id: str, game_name: str, current_settings: dict,
+                    session_stats: dict, sharedeck_data: dict = None) -> dict:
+    sd_context = ""
+    if sharedeck_data and sharedeck_data.get("report_count"):
+        sd_context = f"ShareDeck community ({sharedeck_data['report_count']} reports): {json.dumps(sharedeck_data)}"
+
+    prompt = f"""You are a Steam Deck optimization expert analyzing a gameplay session.
+
+Game: {game_name}
+Current settings: {json.dumps(current_settings)}
+Session performance: {json.dumps(session_stats)}
+{sd_context}
+
+Rules:
+- GPU avg < 60% and TDP > 6W = TDP too high, lower it
+- GPU avg > 90% = GPU bottlenecked, raise TDP or lower graphics
+- Temp avg > 80°C = overheating, lower TDP/GPU clock
+- Battery drain > 50% in < 60 min = poor battery life, lower TDP
+- If ShareDeck data available, prefer their tested values
+
+Output ONLY valid JSON:
+{{
+  "adjustments": {{only include fields that should change, e.g. "tdp": 10, "fps_limit": 30}},
+  "recommendation": "<1-2 sentences explaining what to change and why>",
+  "confidence": <0.0-1.0>
+}}"""
+
+    try:
+        resp = requests.post(OLLAMA_URL, json={
+            "model": OLLAMA_MODEL,
+            "prompt": prompt,
+            "stream": False,
+            "options": {"temperature": 0.3, "num_predict": 200},
+        }, timeout=30)
+        raw = resp.json().get("response", "")
+        json_match = raw[raw.find("{"):raw.rfind("}") + 1]
+        if json_match:
+            result = json.loads(json_match)
+            logger.info(f"AI session analysis for '{game_name}': {result}")
+            return result
+    except Exception as e:
+        logger.warning(f"AI session analysis failed for '{game_name}': {e}")
 
     return {}

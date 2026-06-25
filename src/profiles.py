@@ -33,6 +33,11 @@ class GameProfile:
     scaling_filter: Optional[str] = None
     proton: Optional[str] = None
     settings_source: Optional[str] = None
+    last_session_gpu_avg: Optional[float] = None
+    last_session_power_avg: Optional[float] = None
+    last_session_temp_avg: Optional[float] = None
+    last_session_battery_drain: Optional[int] = None
+    last_session_duration_min: Optional[float] = None
 
 
 def load_profiles() -> dict[str, GameProfile]:

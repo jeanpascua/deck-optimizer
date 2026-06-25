@@ -85,7 +85,19 @@ def scrape_settings(review_url: str) -> dict:
     return settings
 
 
-def get_community_settings(game_name: str) -> dict:
+def get_community_settings(game_name: str, app_id: str = None) -> dict:
+    if app_id:
+        try:
+            from .sharedeck import get_sharedeck_settings
+            from config import load_config
+            display = load_config().get("display_model", "lcd")
+            sd = get_sharedeck_settings(app_id, display_model=display)
+            useful = [k for k in sd if k not in ("source", "report_count") and sd[k] is not None]
+            if len(useful) >= 2:
+                return sd
+        except Exception as e:
+            logger.warning(f"ShareDeck failed: {e}")
+
     cache_file = CACHE_DIR / f"{re.sub(r'[^a-zA-Z0-9]', '_', game_name.lower())}.json"
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
 

@@ -4,6 +4,7 @@ import logging
 import subprocess
 import sys
 import time
+from dataclasses import asdict
 from pathlib import Path
 from typing import Optional
 
@@ -12,6 +13,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from fps_monitor import SAMPLE_INTERVAL
 from game_detector import get_active_game
 from profiles import GameProfile, load_profiles, save_profiles
+from perf_monitor import SessionMonitor
+from session_store import save_session
 from config import load_config
 
 try:
@@ -37,8 +40,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+_active_monitor: Optional[SessionMonitor] = None
+
 
 def main() -> None:
+    global _active_monitor
     logger.info("deck-optimizer started")
 
     profiles = load_profiles()
@@ -50,6 +56,7 @@ def main() -> None:
         if result is None:
             if current_app_id is not None:
                 _on_game_exit(current_app_id, profiles)
+                _active_monitor = None
                 current_app_id = None
         else:
             app_id, game_name = result
@@ -60,6 +67,9 @@ def main() -> None:
 
                 current_app_id = app_id
                 _on_game_launch(app_id, game_name, profiles)
+                _active_monitor = SessionMonitor()
+            elif _active_monitor is not None:
+                _active_monitor.sample()
 
         time.sleep(POLL_INTERVAL)
 
@@ -88,7 +98,7 @@ def _fetch_settings(
     app_id: str, game_name: str, profile: GameProfile, profiles: dict[str, GameProfile]
 ) -> None:
     logger.info(f"New game '{game_name}' — checking community settings...")
-    community = get_community_settings(game_name)
+    community = get_community_settings(game_name, app_id=app_id)
 
     useful_keys = [k for k in community if k not in ("source",) and community[k] is not None]
     if community and len(useful_keys) >= 3:
@@ -161,29 +171,78 @@ def _notify_discord(game_name: str, profile: GameProfile) -> None:
             "footer": {"text": f"Source: {source_label} • Sessions: {profile.session_count}"},
         }
 
-        payload = json.dumps({"embeds": [embed]})
-        subprocess.run(
-            ["curl", "-fsS", "-X", "POST", webhook,
-             "-H", "Content-Type: application/json",
-             "-d", payload],
-            capture_output=True, timeout=10,
-        )
+        _send_discord(webhook, {"embeds": [embed]})
         logger.info(f"Discord notified for '{game_name}'")
     except Exception as e:
         logger.warning(f"Discord notification failed: {e}")
+
+
+def _notify_discord_session_end(game_name: str, profile: GameProfile, stats) -> None:
+    if not WEBHOOK_FILE.exists():
+        return
+    try:
+        webhook = WEBHOOK_FILE.read_text().strip()
+
+        fields = []
+        if stats.gpu_busy_avg is not None:
+            fields.append({"name": "GPU Busy", "value": f"`avg {stats.gpu_busy_avg}%` / `max {stats.gpu_busy_max}%`", "inline": True})
+        if stats.power_watts_avg is not None:
+            fields.append({"name": "Power Draw", "value": f"`avg {stats.power_watts_avg}W` / `max {stats.power_watts_max}W`", "inline": True})
+        if stats.temp_c_avg is not None:
+            fields.append({"name": "Temperature", "value": f"`avg {stats.temp_c_avg}°C` / `max {stats.temp_c_max}°C`", "inline": True})
+        if stats.battery_drain_pct is not None:
+            fields.append({"name": "Battery", "value": f"`{stats.battery_start_pct}%` → `{stats.battery_end_pct}%` (`-{stats.battery_drain_pct}%`)", "inline": True})
+        fields.append({"name": "Duration", "value": f"`{stats.session_duration_min} min`", "inline": True})
+        fields.append({"name": "Samples", "value": f"`{stats.sample_count}`", "inline": True})
+
+        embed = {
+            "title": f"📊 Session End: {game_name}",
+            "color": 0xE67E22,
+            "fields": fields,
+            "footer": {"text": f"Session #{profile.session_count}"},
+        }
+
+        _send_discord(webhook, {"embeds": [embed]})
+        logger.info(f"Session stats sent for '{game_name}'")
+    except Exception as e:
+        logger.warning(f"Session Discord notification failed: {e}")
+
+
+def _send_discord(webhook: str, payload_dict: dict) -> None:
+    payload = json.dumps(payload_dict)
+    subprocess.run(
+        ["curl", "-fsS", "-X", "POST", webhook,
+         "-H", "Content-Type: application/json",
+         "-d", payload],
+        capture_output=True, timeout=10,
+    )
 
 
 def _on_game_exit(
     app_id: str,
     profiles: dict[str, GameProfile],
 ) -> None:
+    global _active_monitor
     existing = profiles.get(app_id)
     if existing is None:
         return
 
-    existing.session_count += 1
-    save_profiles(profiles)
-    logger.info(f"Session ended for '{existing.game_name}' (session #{existing.session_count})")
+    if _active_monitor is not None:
+        stats = _active_monitor.summarize()
+        save_session(app_id, existing.game_name, stats)
+        existing.last_session_gpu_avg = stats.gpu_busy_avg
+        existing.last_session_power_avg = stats.power_watts_avg
+        existing.last_session_temp_avg = stats.temp_c_avg
+        existing.last_session_battery_drain = stats.battery_drain_pct
+        existing.last_session_duration_min = stats.session_duration_min
+        existing.session_count += 1
+        save_profiles(profiles)
+        _notify_discord_session_end(existing.game_name, existing, stats)
+        logger.info(f"Session ended for '{existing.game_name}' (session #{existing.session_count})")
+    else:
+        existing.session_count += 1
+        save_profiles(profiles)
+        logger.info(f"Session ended for '{existing.game_name}' (no monitor)")
 
 
 if __name__ == "__main__":

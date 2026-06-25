@@ -11,8 +11,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from optimizer.optimize import optimize_game
+from optimizer.ai_predict import analyze_session
+from optimizer.sharedeck import get_sharedeck_settings
 from config import load_config
 from profiles import GameProfile, load_profiles, save_profiles
+from session_store import load_all_sessions
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -52,12 +55,37 @@ def sync_profiles_to_deck(profiles: dict):
     logger.info(f"Synced {len(profiles)} profiles to Deck")
 
 
+def pull_sessions_from_deck() -> dict:
+    import tempfile
+    tmp_dir = tempfile.mkdtemp()
+    sessions_path = "~/.local/share/deck-optimizer/sessions/"
+    result = subprocess.run(
+        ["scp", "-r", f"{DECK_HOST}:{sessions_path}", tmp_dir],
+        capture_output=True, timeout=30,
+    )
+    all_sessions = {}
+    sessions_dir = Path(tmp_dir) / "sessions"
+    if sessions_dir.exists():
+        for f in sessions_dir.glob("*.json"):
+            try:
+                data = json.loads(f.read_text())
+                all_sessions[f.stem] = data.get("sessions", [])
+            except (json.JSONDecodeError, TypeError):
+                continue
+    logger.info(f"Pulled sessions for {len(all_sessions)} games from Deck")
+    return all_sessions
+
+
 def main():
     logger.info("Fetching game list from Deck...")
     games = get_deck_games()
     logger.info(f"Found {len(games)} games")
 
+    logger.info("Pulling session data from Deck...")
+    deck_sessions = pull_sessions_from_deck()
+
     profiles = load_profiles()
+    display = _config.get("display_model", "lcd")
 
     for game in games:
         app_id = game["app_id"]
@@ -103,7 +131,24 @@ def main():
 
         profile.settings_source = method
         icon = {"community": "✅", "ai": "🤖", "none": "❓"}.get(method, "?")
-        print(f"  {icon} {name}: TDP={profile.learned_tdp}W FPS={profile.target_fps} FSR={profile.fsr} Preset={profile.graphics_preset}")
+        print(f"  {icon} {name}: TDP={profile.learned_tdp}W FPS={profile.target_fps} FSR={profile.fsr}")
+
+        sessions = deck_sessions.get(app_id, [])
+        if sessions:
+            latest = sessions[-1]
+            sd = get_sharedeck_settings(app_id, display_model=display)
+            current = {"tdp": profile.learned_tdp, "fps_limit": profile.target_fps,
+                        "gpu_clock": profile.gpu_clock, "fsr": profile.fsr}
+            analysis = analyze_session(app_id, name, current, latest, sharedeck_data=sd)
+            if analysis.get("confidence", 0) >= 0.6 and analysis.get("adjustments"):
+                for k, v in analysis["adjustments"].items():
+                    if k == "tdp":
+                        profile.learned_tdp = float(v)
+                    elif k == "fps_limit":
+                        profile.target_fps = int(v)
+                    elif hasattr(profile, k):
+                        setattr(profile, k, v)
+                print(f"    🧠 AI adjusted: {analysis.get('recommendation', '')}")
 
         time.sleep(2)
 
