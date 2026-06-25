@@ -24,6 +24,8 @@ class GameProfile:
     shadows: Optional[str] = None
     antialiasing: Optional[str] = None
     textures: Optional[str] = None
+    half_rate_shading: Optional[bool] = None
+    proton: Optional[str] = None
     settings_source: Optional[str] = None
 
 

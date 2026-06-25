@@ -15,6 +15,7 @@ from game_detector import get_active_game
 from learner import TDPLearner, CONFIDENCE_PER_SESSION
 from profiles import GameProfile, load_profiles, save_profiles
 from tdp_controller import MAX_TDP, set_tdp, clear_active_tdp, set_gpu_clock, clear_gpu_clock, set_fps_limit, clear_fps_limit
+from steam_config import build_launch_options, set_launch_options, set_proton_version
 try:
     from optimizer.scraper import get_community_settings
     from optimizer.ai_predict import predict_settings
@@ -95,6 +96,11 @@ def _on_game_launch(
         set_gpu_clock(int(profile.gpu_clock))
     if profile.target_fps:
         set_fps_limit(profile.target_fps)
+    if profile.fsr is not None:
+        opts = build_launch_options(fsr=profile.fsr)
+        set_launch_options(app_id, opts)
+    if profile.proton:
+        set_proton_version(app_id, profile.proton)
 
     _notify_discord(game_name, profile)
     return TDPLearner(initial_tdp=initial_tdp)
@@ -123,6 +129,8 @@ def _notify_discord(game_name: str, profile: GameProfile) -> None:
             lines.append(f"Shadows: **{profile.shadows}**")
         if profile.antialiasing:
             lines.append(f"AA: **{profile.antialiasing}**")
+        if profile.proton:
+            lines.append(f"Proton: **{profile.proton}**")
         if profile.textures:
             lines.append(f"Textures: **{profile.textures}**")
         if profile.confidence > 0:
@@ -175,7 +183,7 @@ def _get_initial_settings(
 
 def _apply_settings(profile: GameProfile, settings: dict) -> None:
     for field in ["gpu_clock", "fsr", "graphics_preset", "resolution",
-                   "shadows", "antialiasing", "textures"]:
+                   "shadows", "antialiasing", "textures", "half_rate_shading", "proton"]:
         val = settings.get(field)
         if val is not None:
             setattr(profile, field, val)
