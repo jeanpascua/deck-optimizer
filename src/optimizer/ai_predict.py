@@ -57,30 +57,32 @@ Steam Deck hardware (2026):
 - Half Rate Shading: reduces texture quality for FPS boost
 - SteamOS (Linux, Proton for Windows games)
 
-TDP guidelines (give ONE number, not a range):
-- 2D/pixel art/card games (Slay the Spire, Celeste): 4-6W
-- Light 3D/older games (Stardew Valley, Portal 2): 7-9W
-- Medium 3D (Witcher 3, MH Rise, Hades): 10-12W
-- Heavy AAA (Cyberpunk, Elden Ring, Hogwarts Legacy): 13-15W
+CRITICAL: Match TDP to the game's ACTUAL demand. Do NOT default to 13W for everything.
 
-GPU clock guidelines (give ONE number):
-- 2D/light games: 400-800 MHz
+TDP (give ONE number, not a range):
+- 2D/pixel/card/retro/SNES/GBA/visual novel: 4-5W (e.g. Slay the Spire=5, Chrono Trigger=4, Stardew Valley=5, Undertale=4)
+- Light 3D/indie/older 3D: 7-9W (e.g. Portal 2=8, Hades=9, Celeste=5, Hollow Knight=6, Core Keeper=6)
+- Medium 3D/action RPG: 10-12W (e.g. Witcher 3=12, MH Rise=11, Outer Wilds=10)
+- Heavy AAA/2022+: 13-15W (e.g. Cyberpunk=15, Elden Ring=14, Hogwarts Legacy=15, FF7 Rebirth=15)
+
+GPU clock (give ONE number):
+- 2D/retro: 400-600 MHz
+- Light 3D/indie: 600-800 MHz
 - Medium 3D: 800-1200 MHz
 - Heavy AAA: 1200-1600 MHz
-- Tip: lowering GPU clock below 1600 can stabilize FPS and save battery
 
-FPS limit guidelines:
-- Heavy AAA: 30fps (saves battery, stable)
-- Medium 3D: 40fps (good balance)
-- Light/2D games: 60fps
-- Allowed values: 15, 30, 40, 60 (LCD model, 60Hz max)
+FPS limit:
+- Heavy AAA: 30fps
+- Medium 3D: 40fps
+- Light/2D/indie: 60fps
+- Allowed: 15, 30, 40, 60
 
-FSR: enable for demanding 3D games running below native res. Disable for 2D/pixel art/native-res games.
-Half Rate Shading: enable only for very demanding games as last resort, introduces visual artifacts.
-Allow Tearing: enable for competitive/fast-paced games where input latency matters more than visual smoothness. Disable for casual/story games.
-Disable Frame Limit: almost always false. Only true for benchmarking.
-Scaling Mode: "fit" for most games (preserves aspect ratio). "fill" for games that support ultrawide. "stretch" rarely.
-Scaling Filter: "fsr" when FSR is on. "linear" for 2D/pixel games. "integer" for retro pixel art. "nearest" for sharp pixels.
+FSR: true ONLY for demanding 3D games. false for 2D/pixel/retro — they run at native res fine.
+Half Rate Shading: true ONLY as last resort for heaviest games. false for everything else.
+Allow Tearing: true for competitive/fast-paced. false for casual/story/turn-based.
+Disable Frame Limit: false always unless benchmarking.
+Scaling Mode: "fit" almost always.
+Scaling Filter: "fsr" when FSR on. "linear" for 2D. "integer" for pixel art retro games.
 
 Game: {game_name}
 Steam info: {json.dumps(steam_info, indent=2) if steam_info else 'unavailable'}
