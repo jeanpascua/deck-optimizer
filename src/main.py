@@ -144,20 +144,16 @@ def _notify_discord(game_name: str, profile: GameProfile) -> None:
             manual.append(f"FPS: {profile.target_fps}")
         if profile.fsr is not None:
             manual.append(f"FSR: {'on' if profile.fsr else 'off'}")
-        if profile.graphics_preset:
-            manual.append(f"Preset: {profile.graphics_preset}")
-        if profile.resolution:
-            manual.append(f"Res: {profile.resolution}")
-        if profile.shadows:
-            manual.append(f"Shadows: {profile.shadows}")
-        if profile.antialiasing:
-            manual.append(f"AA: {profile.antialiasing}")
-        if profile.textures:
-            manual.append(f"Textures: {profile.textures}")
-        if profile.proton:
-            manual.append(f"Proton: {profile.proton}")
+        if profile.half_rate_shading:
+            manual.append(f"HRS: on")
+        if profile.allow_tearing:
+            manual.append(f"Tearing: on")
+        if profile.scaling_mode:
+            manual.append(f"Scale: {profile.scaling_mode}")
+        if profile.scaling_filter:
+            manual.append(f"Filter: {profile.scaling_filter}")
         if manual:
-            lines.append(f"🔧 **Set manually:** {' | '.join(manual)}")
+            lines.append(f"🔧 **Set in Quick Access:** {' | '.join(manual)}")
 
         msg = " | ".join(lines)
         payload = json.dumps({"content": msg})
