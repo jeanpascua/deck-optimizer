@@ -29,6 +29,7 @@ class GameProfile:
     allow_tearing: Optional[bool] = None
     disable_frame_limit: Optional[bool] = None
     scaling_mode: Optional[str] = None
+    sharpness: Optional[int] = None
     scaling_filter: Optional[str] = None
     proton: Optional[str] = None
     settings_source: Optional[str] = None

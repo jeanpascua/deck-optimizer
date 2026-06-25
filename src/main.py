@@ -112,7 +112,7 @@ def _fetch_settings(
 
 def _apply_settings(profile: GameProfile, settings: dict) -> None:
     for field in ["gpu_clock", "fsr", "half_rate_shading", "allow_tearing",
-                   "disable_frame_limit", "scaling_mode", "scaling_filter"]:
+                   "disable_frame_limit", "scaling_mode", "scaling_filter", "sharpness"]:
         val = settings.get(field)
         if val is not None:
             setattr(profile, field, val)
@@ -156,7 +156,7 @@ def _notify_discord(game_name: str, profile: GameProfile) -> None:
                 {"name": "TDP Limit", "value": f"`{tdp}`", "inline": True},
                 {"name": "Manual GPU Clock", "value": f"`{gpu}`", "inline": True},
                 {"name": "Scaling Mode", "value": f"`{profile.scaling_mode or 'auto'}`", "inline": True},
-                {"name": "Scaling Filter", "value": f"`{scaling_filter}`", "inline": True},
+                {"name": "Scaling Filter", "value": f"`{scaling_filter}`" + (f" (sharpness `{profile.sharpness}`)" if profile.sharpness is not None else ""), "inline": True},
             ] + ([{"name": "⚠️ Proton", "value": f"`{profile.proton}`", "inline": False}] if profile.proton else []),
             "footer": {"text": f"Source: {source_label} • Sessions: {profile.session_count}"},
         }

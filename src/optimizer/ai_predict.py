@@ -89,6 +89,7 @@ Allow Tearing: true for competitive/fast-paced. false for casual/story/turn-base
 Disable Frame Limit: false always unless benchmarking.
 Scaling Mode options: auto, integer, fit, stretch, fill. Use "fit" for most games. "integer" for pixel art. "stretch" or "fill" rarely.
 Scaling Filter (Steam Deck LCD labels): "sharp" for 3D games (FSR/NIS upscaling). "linear" for most games. "pixel" for retro/pixel art.
+Sharpness (0-5): only applies when scaling_filter is "sharp". 3 is balanced. 5 is sharpest. 0 is softest.
 
 Game: {game_name}
 Steam info: {json.dumps(steam_info, indent=2) if steam_info else 'unavailable'}
@@ -105,6 +106,7 @@ Output ONLY valid JSON. Give single values, NOT ranges:
   "disable_frame_limit": <true/false>,
   "scaling_mode": "<auto/integer/fit/stretch/fill>",
   "scaling_filter": "<linear/pixel/sharp>",
+  "sharpness": <0-5 only when scaling_filter is sharp, omit otherwise>,
   "graphics_preset": "<low/medium/high>",
   "resolution": "1280x800",
   "shadows": "<off/low/medium/high>",
