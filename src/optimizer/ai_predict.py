@@ -47,18 +47,50 @@ def predict_settings(app_id: str, game_name: str, existing_profiles: dict = None
 
     prompt = f"""You are a Steam Deck optimization expert. Predict optimal settings for this game.
 
+Steam Deck hardware (2026):
+- APU: AMD Van Gogh — 4-core Zen 2 CPU + 8 RDNA 2 GPU CUs
+- GPU clock: 200-1600 MHz (higher = more power, lower can improve stability)
+- RAM: 16GB LPDDR5
+- Display: 1280x800 LCD 60Hz max
+- TDP range: 4W-15W (battery life vs performance tradeoff)
+- FSR: system-level toggle, upscales from lower res
+- Half Rate Shading: reduces texture quality for FPS boost
+- SteamOS (Linux, Proton for Windows games)
+
+TDP guidelines (give ONE number, not a range):
+- 2D/pixel art/card games (Slay the Spire, Celeste): 4-6W
+- Light 3D/older games (Stardew Valley, Portal 2): 7-9W
+- Medium 3D (Witcher 3, MH Rise, Hades): 10-12W
+- Heavy AAA (Cyberpunk, Elden Ring, Hogwarts Legacy): 13-15W
+
+GPU clock guidelines (give ONE number):
+- 2D/light games: 400-800 MHz
+- Medium 3D: 800-1200 MHz
+- Heavy AAA: 1200-1600 MHz
+- Tip: lowering GPU clock below 1600 can stabilize FPS and save battery
+
+FPS limit guidelines:
+- Heavy AAA: 30fps (saves battery, stable)
+- Medium 3D: 40fps (good balance)
+- Light/2D games: 60fps
+- Allowed values: 15, 30, 40, 60 (LCD model, 60Hz max)
+
+FSR: enable for demanding 3D games running below native res. Disable for 2D/pixel art/native-res games.
+Half Rate Shading: enable only for very demanding games as last resort.
+
 Game: {game_name}
 Steam info: {json.dumps(steam_info, indent=2) if steam_info else 'unavailable'}
 {similar_profiles}
 
-Output ONLY valid JSON with these fields (omit if unsure):
+Output ONLY valid JSON. Give single values, NOT ranges:
 {{
-  "tdp": <8-15 watts>,
-  "gpu_clock": <200-1600 MHz>,
-  "fps_limit": <30 or 40 or 60>,
+  "tdp": <single number 4-15>,
+  "gpu_clock": <single number 200-1600>,
+  "fps_limit": <15 or 30 or 40 or 60>,
   "fsr": <true/false>,
+  "half_rate_shading": <true/false>,
   "graphics_preset": "<low/medium/high>",
-  "resolution": "<1280x800 or 800p>",
+  "resolution": "1280x800",
   "shadows": "<off/low/medium/high>",
   "antialiasing": "<off/low/medium/high>",
   "textures": "<low/medium/high>",
