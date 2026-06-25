@@ -1,10 +1,10 @@
 [Unit]
-Description=Steam Deck Auto TDP Learner
+Description=Steam Deck Optimizer — TDP learning + AI settings
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 %h/projects/deck-auto-tdp/src/main.py
+ExecStart=/usr/bin/python3 %h/projects/deck-optimizer/src/main.py
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal

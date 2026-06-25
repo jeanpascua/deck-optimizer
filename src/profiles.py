@@ -6,7 +6,7 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-PROFILES_PATH = Path.home() / ".config" / "deck-auto-tdp" / "profiles.json"
+PROFILES_PATH = Path.home() / ".config" / "deck-optimizer" / "profiles.json"
 
 
 @dataclass
@@ -17,6 +17,14 @@ class GameProfile:
     session_count: int
     confidence: float  # 0.0 - 1.0
     target_fps: int = 40
+    gpu_clock: Optional[int] = None
+    fsr: Optional[bool] = None
+    graphics_preset: Optional[str] = None
+    resolution: Optional[str] = None
+    shadows: Optional[str] = None
+    antialiasing: Optional[str] = None
+    textures: Optional[str] = None
+    settings_source: Optional[str] = None
 
 
 def load_profiles() -> dict[str, GameProfile]:
