@@ -10,7 +10,8 @@ MAX_TDP = 15.0  # watts
 MIN_GPU_CLOCK = 200   # MHz
 MAX_GPU_CLOCK = 1600  # MHz
 
-STATE_FILE = Path.home() / ".local" / "share" / "deck-optimizer" / "active-tdp"
+STATE_DIR = Path.home() / ".local" / "share" / "deck-optimizer"
+STATE_FILE = STATE_DIR / "active-tdp"
 GPU_CLOCK_PATH = Path("/sys/class/drm/card0/device/pp_od_clk_voltage")
 FPS_LIMIT_PATH = Path.home() / ".local" / "share" / "deck-optimizer" / "active-fps"
 

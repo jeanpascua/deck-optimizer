@@ -2,5 +2,8 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-*.json
 .env
+profiles.json
+config.json
+discord-webhook
+*.log

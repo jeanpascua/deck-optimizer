@@ -1,39 +1,56 @@
 # deck-optimizer
 
-Steam Deck optimizer — auto-learning TDP + AI-powered game settings. No Decky Loader required.
+Auto-learning TDP + AI-powered game settings optimizer for Steam Deck. No Decky Loader required.
 
-## How it works
+## What it does
 
-Single service that handles everything:
+Runs as a background service on your Steam Deck. When you launch a game:
 
-1. **Game launches** → checks for existing profile
-2. **No profile?** → scrapes SteamDeckHQ for community-tested settings
-3. **No community data?** → AI predicts optimal settings (TDP, FPS, graphics preset, FSR, etc.)
-4. **During gameplay** → monitors GPU usage, fine-tunes TDP in real-time
-5. **Game exits** → saves learned TDP + settings to profile
+1. Checks for an existing profile
+2. No profile? Scrapes **SteamDeckHQ** for community-tested settings
+3. No community data? **AI predicts** optimal settings using a local LLM
+4. **Auto-applies**: TDP, GPU clock, FPS limit, FSR, scaling mode/filter, half rate shading
+5. **Sends Discord notification** with recommended settings (including manual ones like graphics preset)
+6. **Learns during gameplay** — monitors GPU usage and fine-tunes TDP over sessions
+7. Resets everything to defaults when you quit
 
-Converges over 1-2 sessions with AI cold start (vs 3-5 without).
+### Auto-applied settings
 
-### TDP Learning
+| Setting | Method |
+|---|---|
+| TDP | ryzenadj (auto-learns optimal value) |
+| GPU Clock | ryzenadj |
+| FPS Limit | MANGOHUD_CONFIG |
+| FSR | WINE_FULLSCREEN_FSR |
+| Scaling Filter | STEAM_GAMESCOPE_SCALING_FILTER |
+| Scaling Mode | STEAM_GAMESCOPE_SCALING_MODE |
+| Half Rate Shading | RADV_PERFTEST |
+| Allow Tearing | STEAM_GAMESCOPE_VR_TEARING |
 
-- **GPU < 62% busy** → TDP has headroom, step down 1W
-- **GPU > 88% busy** → TDP is limiting, step up 1W
-- **GPU 62-88% busy** → stable, save this TDP
+### Discord notifications
 
-### Settings Sources
-
-- ✅ **Community** — scraped from SteamDeckHQ (tested by real users)
-- 🤖 **AI** — predicted by local Ollama model based on game specs
-- Profiles store: TDP, GPU clock, FPS limit, FSR, graphics preset, resolution, shadows, AA, textures
+| Setting | Shown in notification |
+|---|---|
+| Graphics preset | Manual apply |
+| Shadows / AA / Textures | Manual apply |
+| Proton version | Manual apply |
 
 ## Requirements
 
-- Steam Deck (SteamOS)
-- `ryzenadj` — `sudo pacman -S ryzenadj`
+### On the Steam Deck
+- SteamOS
 - Python 3.10+
-- Ollama (optional, for AI predictions) — `curl -fsSL https://ollama.com/install.sh | sh && ollama pull gemma3:4b`
+- [ryzenadj](https://github.com/FlyGoat/RyzenAdj) (see install instructions below)
+
+### On your PC (for AI optimizer)
+- Python 3.10+
+- [Ollama](https://ollama.com) with a model (e.g. `gemma3:4b`)
+- SSH access to your Deck
+- `pip install -r requirements.txt`
 
 ## Install
+
+### 1. Clone on Steam Deck
 
 ```bash
 git clone https://github.com/jeanpascua/deck-optimizer ~/projects/deck-optimizer
@@ -41,27 +58,114 @@ cd ~/projects/deck-optimizer
 bash scripts/install.sh
 ```
 
-## CLI
+The installer will:
+- Run interactive setup (Deck IP, Discord webhook, display model)
+- Check for ryzenadj
+- Install and start the systemd service
+
+### 2. Install ryzenadj (Steam Deck)
+
+```bash
+sudo steamos-readonly disable
+sudo pacman-key --init && sudo pacman-key --populate
+sudo pacman -S base-devel cmake git pciutils
+git clone https://github.com/FlyGoat/RyzenAdj ~/ryzenadj
+cd ~/ryzenadj && mkdir build && cd build && cmake .. && make
+sudo cp ryzenadj /usr/local/bin/ && sudo chmod +s /usr/local/bin/ryzenadj
+sudo steamos-readonly enable
+```
+
+### 3. Set up PC-side optimizer (optional)
+
+On your PC:
+
+```bash
+git clone https://github.com/jeanpascua/deck-optimizer ~/projects/deck-optimizer
+cd ~/projects/deck-optimizer
+pip install -r requirements.txt
+ollama pull gemma3:4b
+python3 src/config.py  # interactive setup
+```
+
+Set up SSH key access to your Deck:
+
+```bash
+ssh-copy-id deck@steamdeck.local
+```
+
+## Usage
+
+### Optimize all games (from PC)
 
 ```bash
 cd ~/projects/deck-optimizer/src
-
-# Optimize a single game
-python3 -m optimizer.cli --game "Elden Ring" --app-id 1245620
-
-# Optimize all installed games
-python3 -m optimizer.cli --library
-
-# Post results to Discord
-python3 -m optimizer.cli --library --discord
-
-# JSON output
-python3 -m optimizer.cli --game "Balatro" --app-id 2379780 --json
+python3 -m optimizer.sync_deck
 ```
+
+Fetches your Deck's game library, optimizes each game (community + AI), and syncs profiles to the Deck.
+
+### Optimize a single game
+
+```bash
+python3 -m optimizer.cli --game "Elden Ring" --app-id 1245620
+```
+
+### Post results to Discord
+
+```bash
+python3 -m optimizer.cli --library --discord
+```
+
+### JSON output
+
+```bash
+python3 -m optimizer.cli --game "Cyberpunk 2077" --app-id 1091500 --json
+```
+
+## Configuration
+
+Config file: `~/.config/deck-optimizer/config.json`
+
+See `config/config.example.json` for all options. Key settings:
+
+| Setting | Default | Description |
+|---|---|---|
+| `deck_host` | `deck@steamdeck.local` | SSH host for your Deck |
+| `ollama_model` | `gemma3:4b` | Local LLM for predictions |
+| `display_model` | `lcd` | `lcd` (60Hz) or `oled` (90Hz) |
+| `discord_webhook_file` | `~/.config/deck-optimizer/discord-webhook` | Path to webhook URL file |
+
+## How TDP learning works
+
+- **GPU < 62% busy** → TDP has headroom, step down 1W
+- **GPU > 88% busy** → TDP is limiting, step up 1W
+- **GPU 62-88% busy** → stable, save this TDP
+
+Converges over 1-2 sessions with AI cold start, 3-5 without.
 
 ## Profiles
 
-Stored at `~/.config/deck-optimizer/profiles.json`. Edit manually to override learned settings.
+Stored at `~/.config/deck-optimizer/profiles.json`. Each game profile contains:
+
+```json
+{
+  "app_id": "292030",
+  "game_name": "The Witcher 3: Wild Hunt",
+  "learned_tdp": 12.0,
+  "session_count": 3,
+  "confidence": 0.6,
+  "target_fps": 40,
+  "gpu_clock": 1200,
+  "fsr": true,
+  "graphics_preset": "medium",
+  "resolution": "1280x800",
+  "shadows": "medium",
+  "scaling_filter": "fsr",
+  "settings_source": "ai"
+}
+```
+
+Edit manually to override any value.
 
 ## Logs
 
@@ -75,4 +179,9 @@ journalctl --user -u deck-optimizer -f
 systemctl --user stop deck-optimizer
 systemctl --user disable deck-optimizer
 rm ~/.config/systemd/user/deck-optimizer.service
+rm -rf ~/.config/deck-optimizer
 ```
+
+## License
+
+MIT

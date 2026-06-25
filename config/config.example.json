@@ -1,0 +1,14 @@
+{
+  "deck_host": "deck@steamdeck.local",
+  "deck_steamapps": "~/.local/share/Steam/steamapps",
+  "deck_profiles_path": "~/.config/deck-optimizer/profiles.json",
+  "discord_webhook_file": "~/.config/deck-optimizer/discord-webhook",
+  "ollama_url": "http://localhost:11434/api/generate",
+  "ollama_model": "gemma3:4b",
+  "tdp_min": 4,
+  "tdp_max": 15,
+  "gpu_clock_min": 200,
+  "gpu_clock_max": 1600,
+  "display_hz": 60,
+  "display_model": "lcd"
+}

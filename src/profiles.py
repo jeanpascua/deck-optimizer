@@ -6,7 +6,8 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-PROFILES_PATH = Path.home() / ".config" / "deck-optimizer" / "profiles.json"
+CONFIG_DIR = Path.home() / ".config" / "deck-optimizer"
+PROFILES_PATH = CONFIG_DIR / "profiles.json"
 
 
 @dataclass

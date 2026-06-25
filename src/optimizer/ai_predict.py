@@ -4,13 +4,19 @@
 import json
 import logging
 import subprocess
+import sys
+from pathlib import Path
 import requests
 from typing import Optional
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from config import load_config
+
 logger = logging.getLogger(__name__)
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-OLLAMA_MODEL = "gemma3:4b"
+_config = load_config()
+OLLAMA_URL = _config["ollama_url"]
+OLLAMA_MODEL = _config["ollama_model"]
 STEAM_API = "https://store.steampowered.com/api/appdetails?appids={}"
 
 

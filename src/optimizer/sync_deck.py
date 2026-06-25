@@ -11,14 +11,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from optimizer.optimize import optimize_game
+from config import load_config
 from profiles import GameProfile, load_profiles, save_profiles
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-DECK_HOST = "deck@192.168.1.93"
-DECK_STEAMAPPS = "~/.local/share/Steam/steamapps"
-DECK_PROFILES = "~/.config/deck-optimizer/profiles.json"
+_config = load_config()
+DECK_HOST = _config["deck_host"]
+DECK_STEAMAPPS = _config["deck_steamapps"]
+DECK_PROFILES = _config["deck_profiles_path"]
 
 
 def get_deck_games() -> list[dict]:
