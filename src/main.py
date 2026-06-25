@@ -4,7 +4,7 @@ import logging
 import os
 import sys
 import time
-import requests
+import urllib.request
 from pathlib import Path
 from typing import Optional
 
@@ -15,8 +15,12 @@ from game_detector import get_active_game
 from learner import TDPLearner, CONFIDENCE_PER_SESSION
 from profiles import GameProfile, load_profiles, save_profiles
 from tdp_controller import MAX_TDP, set_tdp, clear_active_tdp
-from optimizer.scraper import get_community_settings
-from optimizer.ai_predict import predict_settings
+try:
+    from optimizer.scraper import get_community_settings
+    from optimizer.ai_predict import predict_settings
+    HAS_OPTIMIZER = True
+except ImportError:
+    HAS_OPTIMIZER = False
 
 WEBHOOK_FILE = Path.home() / ".config" / "cron-alerts" / "discord-webhook"
 LOG_PATH = Path.home() / ".local" / "share" / "deck-optimizer" / "service.log"
@@ -120,7 +124,9 @@ def _notify_discord(game_name: str, profile: GameProfile) -> None:
             lines.append(f"Confidence: **{profile.confidence:.0%}**")
 
         msg = " | ".join(lines)
-        requests.post(webhook, json={"content": msg}, timeout=5)
+        data = json.dumps({"content": msg}).encode()
+        req = urllib.request.Request(webhook, data=data, headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=5)
         logger.info(f"Discord notified for '{game_name}'")
     except Exception as e:
         logger.warning(f"Discord notification failed: {e}")
@@ -129,6 +135,9 @@ def _notify_discord(game_name: str, profile: GameProfile) -> None:
 def _get_initial_settings(
     app_id: str, game_name: str, profile: GameProfile, profiles: dict[str, GameProfile]
 ) -> Optional[float]:
+    if not HAS_OPTIMIZER:
+        logger.info(f"No optimizer module — starting '{game_name}' at {MAX_TDP}W")
+        return None
     logger.info(f"New game '{game_name}' — checking community settings...")
     community = get_community_settings(game_name)
 
