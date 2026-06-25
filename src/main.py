@@ -23,7 +23,7 @@ try:
 except ImportError:
     HAS_OPTIMIZER = False
 
-WEBHOOK_FILE = Path.home() / ".config" / "cron-alerts" / "discord-webhook"
+WEBHOOK_FILE = Path.home() / ".config" / "deck-optimizer" / "discord-webhook"
 LOG_PATH = Path.home() / ".local" / "share" / "deck-optimizer" / "service.log"
 LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 POLL_INTERVAL = SAMPLE_INTERVAL
