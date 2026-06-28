@@ -5,7 +5,7 @@
   "discord_webhook_file": "~/.config/deck-optimizer/discord-webhook",
   "ollama_url": "http://localhost:11434/api/generate",
   "ollama_model": "gemma3:4b",
-  "tdp_min": 4,
+  "tdp_min": 3,
   "tdp_max": 15,
   "gpu_clock_min": 200,
   "gpu_clock_max": 1600,

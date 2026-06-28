@@ -5,7 +5,7 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-MIN_TDP = 4.0   # watts
+MIN_TDP = 3.0   # watts
 MAX_TDP = 15.0  # watts
 MIN_GPU_CLOCK = 200   # MHz
 MAX_GPU_CLOCK = 1600  # MHz
@@ -47,6 +47,7 @@ def set_tdp(watts: float) -> bool:
 
 
 def set_gpu_clock(mhz: int) -> bool:
+    mhz = round(mhz / 100) * 100
     mhz = max(MIN_GPU_CLOCK, min(MAX_GPU_CLOCK, mhz))
     try:
         subprocess.run(
