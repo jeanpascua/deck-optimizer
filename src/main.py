@@ -142,6 +142,8 @@ def _apply_settings(profile: GameProfile, settings: dict) -> None:
                    "disable_frame_limit", "scaling_mode", "scaling_filter", "sharpness"]:
         val = settings.get(field)
         if val is not None:
+            if field == "gpu_clock":
+                val = max(200, min(1600, round(int(val) / 100) * 100))
             setattr(profile, field, val)
     if settings.get("tdp"):
         tdp = settings["tdp"]
