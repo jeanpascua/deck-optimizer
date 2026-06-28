@@ -43,7 +43,32 @@ def get_deck_games() -> list[dict]:
     return games
 
 
+def pull_profiles_from_deck() -> dict:
+    import tempfile, json as _json
+    tmp = Path(tempfile.mktemp(suffix=".json"))
+    result = subprocess.run(
+        ["scp", f"{DECK_HOST}:{DECK_PROFILES}", str(tmp)],
+        capture_output=True, timeout=10,
+    )
+    if result.returncode != 0 or not tmp.exists():
+        return {}
+    try:
+        data = _json.loads(tmp.read_text())
+        tmp.unlink()
+        return data
+    except Exception:
+        return {}
+
+
 def sync_profiles_to_deck(profiles: dict):
+    deck_profiles = pull_profiles_from_deck()
+    for app_id, profile in profiles.items():
+        deck = deck_profiles.get(app_id, {})
+        if deck.get("session_count", 0) > getattr(profile, "session_count", 0):
+            profile.session_count = deck["session_count"]
+        if deck.get("learned_tdp") is not None and getattr(profile, "learned_tdp") is None:
+            profile.learned_tdp = deck["learned_tdp"]
+
     data = json.dumps({k: v.__dict__ if hasattr(v, '__dict__') else v for k, v in profiles.items()}, indent=2, default=str)
     tmp = Path("/tmp/deck-optimizer-profiles.json")
     tmp.write_text(data)
