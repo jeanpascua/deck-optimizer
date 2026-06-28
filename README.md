@@ -119,13 +119,22 @@ See `config/config.example.json` for all options. Key settings:
 | `display_model` | `lcd` | `lcd` (60Hz) or `oled` (90Hz) |
 | `discord_webhook_file` | `~/.config/deck-optimizer/discord-webhook` | Path to webhook URL file |
 
-## How TDP learning works
+## How learning works
+
+### Real-time TDP (during play)
 
 - **GPU < 62% busy** → TDP has headroom, step down 1W
 - **GPU > 88% busy** → TDP is limiting, step up 1W
 - **GPU 62-88% busy** → stable, save this TDP
 
 Converges over 1-2 sessions with AI cold start, 3-5 without.
+
+### AI post-session analysis (on exit)
+
+After each session (>5 min), the local Ollama model analyzes GPU%, power draw, temps, and battery drain against current settings and recommends adjustments for TDP, FPS limit, GPU clock, FSR, and scaling options.
+
+- **Confidence ≥ 85%** → adjustments auto-applied to profile (`settings_source: ai_learned`)
+- **Confidence ≥ 70%** → Discord embed sent with recommendation and whether it was applied
 
 ## Profiles
 
