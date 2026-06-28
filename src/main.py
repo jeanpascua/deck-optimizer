@@ -145,6 +145,8 @@ def _apply_settings(profile: GameProfile, settings: dict) -> None:
             if field == "gpu_clock":
                 val = max(200, min(1600, round(int(val) / 100) * 100))
             setattr(profile, field, val)
+    if profile.scaling_filter == "sharp" and profile.sharpness is None:
+        profile.sharpness = 3
     if settings.get("tdp"):
         tdp = settings["tdp"]
         if isinstance(tdp, str):

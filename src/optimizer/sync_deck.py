@@ -131,6 +131,9 @@ def main():
             except (ValueError, TypeError):
                 pass
 
+        if profile.scaling_filter == "sharp" and profile.sharpness is None:
+            profile.sharpness = 3
+
         profile.settings_source = method
         icon = {"community": "✅", "ai": "🤖", "none": "❓"}.get(method, "?")
         print(f"  {icon} {name}: TDP={profile.learned_tdp}W FPS={profile.target_fps} FSR={profile.fsr}")
