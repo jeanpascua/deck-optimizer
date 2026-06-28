@@ -24,6 +24,12 @@ try:
 except ImportError:
     HAS_OPTIMIZER = False
 
+try:
+    from learner import TDPLearner
+    HAS_LEARNER = True
+except ImportError:
+    HAS_LEARNER = False
+
 _config = load_config()
 WEBHOOK_FILE = Path(_config["discord_webhook_file"])
 LOG_PATH = Path.home() / ".local" / "share" / "deck-optimizer" / "service.log"
@@ -41,10 +47,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 _active_monitor: Optional[SessionMonitor] = None
+_active_learner: Optional["TDPLearner"] = None
 
 
 def main() -> None:
-    global _active_monitor
+    global _active_monitor, _active_learner
     logger.info("deck-optimizer started")
 
     profiles = load_profiles()
@@ -57,6 +64,7 @@ def main() -> None:
             if current_app_id is not None:
                 _on_game_exit(current_app_id, profiles)
                 _active_monitor = None
+                _active_learner = None
                 current_app_id = None
         else:
             app_id, game_name = result
@@ -68,8 +76,17 @@ def main() -> None:
                 current_app_id = app_id
                 _on_game_launch(app_id, game_name, profiles)
                 _active_monitor = SessionMonitor()
+                if HAS_LEARNER:
+                    try:
+                        _active_learner = TDPLearner(initial_tdp=profiles[app_id].learned_tdp)
+                        logger.info(f"TDPLearner started at {profiles[app_id].learned_tdp or 'MAX'}W")
+                    except Exception as e:
+                        logger.warning(f"TDPLearner init failed: {e}")
+                        _active_learner = None
             elif _active_monitor is not None:
                 _active_monitor.sample()
+                if _active_learner is not None:
+                    _active_learner.tick()
 
         time.sleep(POLL_INTERVAL)
 
@@ -303,6 +320,10 @@ def _on_game_exit(
         return
 
     if _active_monitor is not None:
+        if _active_learner is not None:
+            learned_tdp = _active_learner.session_ended()
+            existing.learned_tdp = learned_tdp
+            logger.info(f"TDPLearner converged: {learned_tdp}W for '{existing.game_name}'")
         stats = _active_monitor.summarize()
         save_session(app_id, existing.game_name, stats)
         existing.last_session_gpu_avg = stats.gpu_busy_avg
