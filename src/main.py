@@ -19,7 +19,7 @@ from config import load_config
 
 try:
     from optimizer.scraper import get_community_settings
-    from optimizer.ai_predict import predict_settings
+    from optimizer.ai_predict import predict_settings, analyze_session
     HAS_OPTIMIZER = True
 except ImportError:
     HAS_OPTIMIZER = False
@@ -218,6 +218,81 @@ def _send_discord(webhook: str, payload_dict: dict) -> None:
     )
 
 
+def _profile_to_settings(profile: GameProfile) -> dict:
+    return {
+        "tdp": profile.learned_tdp,
+        "fps_limit": profile.target_fps,
+        "gpu_clock": profile.gpu_clock,
+        "fsr": profile.fsr,
+        "half_rate_shading": profile.half_rate_shading,
+        "allow_tearing": profile.allow_tearing,
+        "disable_frame_limit": profile.disable_frame_limit,
+        "scaling_mode": profile.scaling_mode,
+        "scaling_filter": profile.scaling_filter,
+        "sharpness": profile.sharpness,
+    }
+
+
+def _run_ai_analysis(
+    app_id: str, profile: GameProfile, stats, profiles: dict[str, GameProfile]
+) -> None:
+    if not HAS_OPTIMIZER:
+        return
+    if stats.session_duration_min < 5:
+        logger.info(f"Session too short ({stats.session_duration_min}min), skipping AI analysis")
+        return
+
+    current_settings = _profile_to_settings(profile)
+    try:
+        result = analyze_session(app_id, profile.game_name, current_settings, asdict(stats))
+    except Exception as e:
+        logger.warning(f"AI analysis failed for '{profile.game_name}': {e}")
+        return
+
+    if not result:
+        return
+
+    adjustments = result.get("adjustments", {})
+    recommendation = result.get("recommendation", "")
+    confidence = float(result.get("confidence", 0.0))
+
+    applied = False
+    if confidence >= 0.85 and adjustments:
+        _apply_settings(profile, adjustments)
+        profile.settings_source = "ai_learned"
+        save_profiles(profiles)
+        applied = True
+        logger.info(f"AI auto-applied settings for '{profile.game_name}' (confidence={confidence:.0%}): {adjustments}")
+
+    if confidence >= 0.7 and recommendation:
+        _notify_discord_ai_recommendation(profile.game_name, recommendation, adjustments, confidence, applied)
+
+
+def _notify_discord_ai_recommendation(
+    game_name: str, recommendation: str, adjustments: dict, confidence: float, applied: bool
+) -> None:
+    if not WEBHOOK_FILE.exists():
+        return
+    try:
+        webhook = WEBHOOK_FILE.read_text().strip()
+        status = "Auto-applied ✅" if applied else "Suggestion 💡"
+        adj_text = "\n".join(f"`{k}`: **{v}**" for k, v in adjustments.items()) if adjustments else "No changes needed"
+        embed = {
+            "title": f"🤖 AI Analysis: {game_name}",
+            "color": 0x9B59B6 if applied else 0xF39C12,
+            "description": recommendation,
+            "fields": [
+                {"name": "Adjustments", "value": adj_text, "inline": False},
+                {"name": "Confidence", "value": f"`{confidence:.0%}`", "inline": True},
+                {"name": "Status", "value": status, "inline": True},
+            ],
+        }
+        _send_discord(webhook, {"embeds": [embed]})
+        logger.info(f"AI recommendation sent for '{game_name}'")
+    except Exception as e:
+        logger.warning(f"AI recommendation Discord failed: {e}")
+
+
 def _on_game_exit(
     app_id: str,
     profiles: dict[str, GameProfile],
@@ -238,6 +313,7 @@ def _on_game_exit(
         existing.session_count += 1
         save_profiles(profiles)
         _notify_discord_session_end(existing.game_name, existing, stats)
+        _run_ai_analysis(app_id, existing, stats, profiles)
         logger.info(f"Session ended for '{existing.game_name}' (session #{existing.session_count})")
     else:
         existing.session_count += 1
