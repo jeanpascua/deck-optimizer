@@ -120,6 +120,8 @@ def main():
                     profile.learned_tdp = float(val)
                 elif field == "tdp":
                     profile.learned_tdp = float(val)
+                elif field == "gpu_clock":
+                    profile.gpu_clock = max(200, min(1600, round(int(val) / 100) * 100))
                 else:
                     setattr(profile, field, val)
 
