@@ -148,6 +148,8 @@ def main():
                         profile.learned_tdp = float(v)
                     elif k == "fps_limit":
                         profile.target_fps = int(v)
+                    elif k == "gpu_clock":
+                        profile.gpu_clock = max(200, min(1600, round(int(v) / 100) * 100))
                     elif hasattr(profile, k):
                         setattr(profile, k, v)
                 print(f"    🧠 AI adjusted: {analysis.get('recommendation', '')}")
