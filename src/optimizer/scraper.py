@@ -22,13 +22,36 @@ def _curl_get(url: str) -> str:
     return result.stdout if result.returncode == 0 else ""
 
 
+def _slug_matches(game_name: str, url: str) -> bool:
+    slug = url.rstrip("/").split("/")[-1]
+
+    def normalize(s: str) -> set:
+        s = s.lower()
+        for roman, num in [("viii","8"),("vii","7"),("vi","6"),("iv","4"),("ix","9"),("iii","3"),("ii","2")]:
+            s = re.sub(rf"\b{roman}\b", num, s)
+        return set(re.findall(r"[a-z0-9]+", s))
+
+    slug_words = normalize(slug)
+    game_words = normalize(game_name)
+    if not slug_words or not game_words:
+        return False
+    union = slug_words | game_words
+    return len(slug_words & game_words) / len(union) >= 0.6
+
+
 def search_steamdeckhq(game_name: str) -> Optional[str]:
     query = game_name.replace(" ", "+")
     html = _curl_get(f"https://steamdeckhq.com/?s={query}")
     if not html:
         return None
     match = re.search(r'href="(https://steamdeckhq\.com/game-reviews/[^"]+)"', html)
-    return match.group(1) if match else None
+    if not match:
+        return None
+    url = match.group(1)
+    if not _slug_matches(game_name, url):
+        logger.info(f"SteamDeckHQ result slug doesn't match '{game_name}', skipping")
+        return None
+    return url
 
 
 def scrape_settings(review_url: str) -> dict:
