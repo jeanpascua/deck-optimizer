@@ -117,9 +117,9 @@ def main():
                         val = int(val.split("-")[0])
                     except ValueError:
                         continue
-                    profile.learned_tdp = float(val)
+                    profile.learned_tdp = max(3.0, min(15.0, float(val)))
                 elif field == "tdp":
-                    profile.learned_tdp = float(val)
+                    profile.learned_tdp = max(3.0, min(15.0, float(val)))
                 elif field == "gpu_clock":
                     profile.gpu_clock = max(200, min(1600, round(int(val) / 100) * 100))
                 else:
@@ -148,7 +148,7 @@ def main():
             if analysis.get("confidence", 0) >= 0.6 and analysis.get("adjustments"):
                 for k, v in analysis["adjustments"].items():
                     if k == "tdp":
-                        profile.learned_tdp = float(v)
+                        profile.learned_tdp = max(3.0, min(15.0, float(v)))
                     elif k == "fps_limit":
                         profile.target_fps = int(v)
                     elif k == "gpu_clock":

@@ -154,7 +154,7 @@ def _apply_settings(profile: GameProfile, settings: dict) -> None:
                 tdp = int(tdp.split("-")[0])
             except ValueError:
                 return
-        profile.learned_tdp = float(tdp)
+        profile.learned_tdp = max(3.0, min(15.0, float(tdp)))
     if settings.get("fps_limit"):
         try:
             profile.target_fps = int(settings["fps_limit"])
