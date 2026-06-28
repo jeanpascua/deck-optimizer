@@ -158,6 +158,13 @@ def analyze_session(app_id: str, game_name: str, current_settings: dict,
     if sharedeck_data and sharedeck_data.get("report_count"):
         sd_context = f"ShareDeck community ({sharedeck_data['report_count']} reports): {json.dumps(sharedeck_data)}"
 
+    fps_rules = ""
+    if session_stats.get("fps_avg") is not None:
+        fps_rules = f"""- fps_avg vs fps_limit: if fps_avg < fps_limit * 0.85, game can't hit target — lower fps_limit or raise TDP
+- fps_avg > fps_limit * 0.98 and GPU avg < 60% = fps_limit too conservative, could raise it
+- fps_min far below fps_avg = stuttering, raise TDP or lower gpu_clock
+"""
+
     prompt = f"""You are a Steam Deck optimization expert analyzing a gameplay session.
 
 Game: {game_name}
@@ -171,7 +178,7 @@ Rules:
 - Temp avg > 80°C = overheating, lower TDP/GPU clock
 - Battery drain > 50% in < 60 min = poor battery life, lower TDP
 - If ShareDeck data available, prefer their tested values
-
+{fps_rules}
 Output ONLY valid JSON:
 {{
   "adjustments": {{only include fields that should change, e.g. "tdp": 10, "fps_limit": 30}},

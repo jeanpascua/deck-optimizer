@@ -209,6 +209,8 @@ def _notify_discord_session_end(game_name: str, profile: GameProfile, stats) -> 
             fields.append({"name": "Temperature", "value": f"`avg {stats.temp_c_avg}°C` / `max {stats.temp_c_max}°C`", "inline": True})
         if stats.battery_drain_pct is not None:
             fields.append({"name": "Battery", "value": f"`{stats.battery_start_pct}%` → `{stats.battery_end_pct}%` (`-{stats.battery_drain_pct}%`)", "inline": True})
+        if stats.fps_avg is not None:
+            fields.append({"name": "FPS", "value": f"`avg {stats.fps_avg}` / `min {stats.fps_min}`", "inline": True})
         fields.append({"name": "Duration", "value": f"`{stats.session_duration_min} min`", "inline": True})
         fields.append({"name": "Samples", "value": f"`{stats.sample_count}`", "inline": True})
 

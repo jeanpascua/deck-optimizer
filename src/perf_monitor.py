@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Performance monitoring during gameplay — GPU, power, temp, battery."""
+"""Performance monitoring during gameplay — GPU, power, temp, battery, FPS."""
 
 import logging
 import time
@@ -23,6 +23,7 @@ class PerfSample:
     battery_pct: Optional[int]
     power_watts: Optional[float]
     temp_c: Optional[float]
+    fps: Optional[float]
 
 
 @dataclass
@@ -40,6 +41,8 @@ class SessionStats:
     battery_start_pct: Optional[int]
     battery_end_pct: Optional[int]
     battery_drain_pct: Optional[int]
+    fps_avg: Optional[float]
+    fps_min: Optional[float]
 
 
 def _read_sysfs_float(path: Path) -> Optional[float]:
@@ -74,6 +77,31 @@ def _read_power() -> Optional[float]:
     return None
 
 
+def _read_fps() -> Optional[float]:
+    """Read FPS from gamescope stats file injected into game process environment."""
+    try:
+        for proc in Path("/proc").iterdir():
+            if not proc.name.isdigit():
+                continue
+            try:
+                environ = (proc / "environ").read_bytes().decode("utf-8", errors="ignore")
+                env = dict(v.split("=", 1) for v in environ.split("\x00") if "=" in v)
+                stats_path = env.get("GAMESCOPE_STATS")
+                if not stats_path:
+                    continue
+                stats_file = Path(stats_path)
+                if not stats_file.exists():
+                    continue
+                for line in stats_file.read_text().splitlines():
+                    if line.startswith("fps="):
+                        return float(line.split("=", 1)[1])
+            except (PermissionError, ValueError, OSError):
+                continue
+    except Exception:
+        pass
+    return None
+
+
 class SessionMonitor:
     def __init__(self):
         self._start_time = time.monotonic()
@@ -88,6 +116,7 @@ class SessionMonitor:
             battery_pct=_read_sysfs_int(BATTERY_CAPACITY_PATH),
             power_watts=_read_power(),
             temp_c=_read_temp(),
+            fps=_read_fps(),
         )
         self._samples.append(s)
 
@@ -98,6 +127,7 @@ class SessionMonitor:
         gpu_vals = [s.gpu_busy_pct for s in self._samples if s.gpu_busy_pct is not None]
         power_vals = [s.power_watts for s in self._samples if s.power_watts is not None]
         temp_vals = [s.temp_c for s in self._samples if s.temp_c is not None]
+        fps_vals = [s.fps for s in self._samples if s.fps is not None]
 
         battery_end = _read_sysfs_int(BATTERY_CAPACITY_PATH)
         battery_drain = None
@@ -118,4 +148,6 @@ class SessionMonitor:
             battery_start_pct=self._battery_start,
             battery_end_pct=battery_end,
             battery_drain_pct=battery_drain,
+            fps_avg=round(sum(fps_vals) / len(fps_vals), 1) if fps_vals else None,
+            fps_min=round(min(fps_vals), 1) if fps_vals else None,
         )
