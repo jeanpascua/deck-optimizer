@@ -109,7 +109,7 @@ def main():
         for field in ["tdp", "gpu_clock", "fsr", "graphics_preset", "resolution",
                        "shadows", "antialiasing", "textures", "half_rate_shading",
                        "allow_tearing", "disable_frame_limit", "scaling_mode",
-                       "scaling_filter", "proton"]:
+                       "scaling_filter"]:
             val = settings.get(field)
             if val is not None:
                 if field == "tdp" and isinstance(val, str):
