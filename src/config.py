@@ -17,7 +17,7 @@ DEFAULTS = {
     "deck_profiles_path": "~/.config/deck-optimizer/profiles.json",
     "discord_webhook_file": str(CONFIG_DIR / "discord-webhook"),
     "ollama_url": "http://localhost:11434/api/generate",
-    "ollama_model": "gemma3:4b",
+    "ollama_model": "hermes3",
     "tdp_min": 4,
     "tdp_max": 15,
     "gpu_clock_min": 200,
