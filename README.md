@@ -28,7 +28,7 @@ You apply the settings yourself via the Quick Access Menu (`...` button). Steam'
 
 ### On your PC (for AI optimizer)
 - Python 3.10+
-- [Ollama](https://ollama.com) with a model (e.g. `gemma3:4b`)
+- [Ollama](https://ollama.com) with a model (e.g. `hermes3`)
 - SSH access to your Deck
 - `pip install -r requirements.txt`
 
@@ -67,7 +67,7 @@ On your PC:
 git clone https://github.com/jeanpascua/deck-optimizer ~/projects/deck-optimizer
 cd ~/projects/deck-optimizer
 pip install -r requirements.txt
-ollama pull gemma3:4b
+ollama pull hermes3
 python3 src/config.py  # interactive setup
 ```
 
@@ -115,7 +115,7 @@ See `config/config.example.json` for all options. Key settings:
 | Setting | Default | Description |
 |---|---|---|
 | `deck_host` | `deck@steamdeck.local` | SSH host for your Deck |
-| `ollama_model` | `gemma3:4b` | Local LLM for predictions |
+| `ollama_model` | `hermes3` | Local LLM for predictions |
 | `display_model` | `lcd` | `lcd` (60Hz) or `oled` (90Hz) |
 | `discord_webhook_file` | `~/.config/deck-optimizer/discord-webhook` | Path to webhook URL file |
 
