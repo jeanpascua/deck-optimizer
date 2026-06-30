@@ -31,7 +31,7 @@ class LearnerState:
 class TDPLearner:
     def __init__(self, initial_tdp: Optional[float] = None):
         start = initial_tdp if initial_tdp is not None else MAX_TDP
-        self.tdp = start
+        self.tdp = float(round(start))
         self.state = State.WARMING_UP
         self.monitor = GPUMonitor(window_seconds=180)
         set_tdp(self.tdp)
@@ -97,7 +97,7 @@ class TDPLearner:
             self._boost_tdp()
 
     def _reduce_tdp(self) -> None:
-        new = max(MIN_TDP, self.tdp - STEP_DOWN)
+        new = float(max(MIN_TDP, round(self.tdp) - STEP_DOWN))
         if new < self.tdp:
             self.tdp = new
             set_tdp(self.tdp)
@@ -105,7 +105,7 @@ class TDPLearner:
             logger.info(f"Trying lower TDP: {self.tdp}W")
 
     def _boost_tdp(self) -> None:
-        new = min(MAX_TDP, self.tdp + STEP_UP)
+        new = float(min(MAX_TDP, round(self.tdp) + STEP_UP))
         if new > self.tdp:
             self.tdp = new
             set_tdp(self.tdp)
