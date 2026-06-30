@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 from .scraper import get_community_settings
-from .ai_predict import predict_settings, get_steam_info
+from .ai_predict import predict_settings
 
 logger = logging.getLogger(__name__)
 
