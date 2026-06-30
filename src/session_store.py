@@ -3,6 +3,7 @@
 
 import json
 import logging
+import os
 from dataclasses import asdict
 from pathlib import Path
 
@@ -26,7 +27,9 @@ def save_session(app_id: str, game_name: str, stats) -> None:
     data["sessions"].append(asdict(stats))
     data["sessions"] = data["sessions"][-MAX_SESSIONS:]
 
-    filepath.write_text(json.dumps(data, indent=2))
+    tmp = filepath.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, indent=2))
+    os.replace(tmp, filepath)
     logger.info(f"Saved session for '{game_name}' ({len(data['sessions'])} stored)")
 
 

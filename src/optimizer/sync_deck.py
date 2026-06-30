@@ -14,8 +14,7 @@ from optimizer.optimize import optimize_game
 from optimizer.ai_predict import analyze_session
 from optimizer.sharedeck import get_sharedeck_settings
 from config import load_config
-from profiles import GameProfile, load_profiles, save_profiles
-from session_store import load_all_sessions
+from profiles import GameProfile, ProfileStore, PROFILES_PATH
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -60,24 +59,21 @@ def pull_profiles_from_deck() -> dict:
         return {}
 
 
-def sync_profiles_to_deck(profiles: dict):
+def sync_profiles_to_deck(store: ProfileStore):
     deck_profiles = pull_profiles_from_deck()
-    for app_id, profile in profiles.items():
+    for app_id, profile in store.all().items():
         deck = deck_profiles.get(app_id, {})
-        if deck.get("session_count", 0) > getattr(profile, "session_count", 0):
+        if deck.get("session_count", 0) > profile.session_count:
             profile.session_count = deck["session_count"]
-        if deck.get("learned_tdp") is not None and getattr(profile, "learned_tdp") is None:
+        if deck.get("learned_tdp") is not None and profile.learned_tdp is None:
             profile.learned_tdp = deck["learned_tdp"]
 
-    data = json.dumps({k: v.__dict__ if hasattr(v, '__dict__') else v for k, v in profiles.items()}, indent=2, default=str)
+    store.save()
     tmp = Path("/tmp/deck-optimizer-profiles.json")
-    tmp.write_text(data)
-    subprocess.run(
-        ["scp", str(tmp), f"{DECK_HOST}:{DECK_PROFILES}"],
-        timeout=10,
-    )
+    tmp.write_text(PROFILES_PATH.read_text())
+    subprocess.run(["scp", str(tmp), f"{DECK_HOST}:{DECK_PROFILES}"], timeout=10)
     tmp.unlink()
-    logger.info(f"Synced {len(profiles)} profiles to Deck")
+    logger.info(f"Synced {len(store.all())} profiles to Deck")
 
 
 def pull_sessions_from_deck() -> dict:
@@ -109,7 +105,7 @@ def main():
     logger.info("Pulling session data from Deck...")
     deck_sessions = pull_sessions_from_deck()
 
-    profiles = load_profiles()
+    store = ProfileStore()
     display = _config.get("display_model", "lcd")
 
     for game in games:
@@ -117,10 +113,10 @@ def main():
         name = game["name"]
         logger.info(f"Optimizing: {name} ({app_id})")
 
-        settings = optimize_game(app_id, name, profiles)
+        settings = optimize_game(app_id, name, store.all())
         method = settings.get("method", "none")
 
-        profile = profiles.get(app_id)
+        profile = store.get(app_id)
         if profile is None:
             profile = GameProfile(
                 app_id=app_id,
@@ -129,7 +125,7 @@ def main():
                 session_count=0,
                 confidence=0.0,
             )
-            profiles[app_id] = profile
+            store.set(app_id, profile)
 
         for field in ["tdp", "gpu_clock", "fsr", "graphics_preset", "resolution",
                        "shadows", "antialiasing", "textures", "half_rate_shading",
@@ -184,9 +180,9 @@ def main():
 
         time.sleep(2)
 
-    save_profiles(profiles)
+    store.save()
     logger.info("Syncing profiles to Deck...")
-    sync_profiles_to_deck(profiles)
+    sync_profiles_to_deck(store)
     logger.info("Done!")
 
     subprocess.run(["ssh", DECK_HOST, "systemctl --user restart deck-optimizer"], timeout=10)

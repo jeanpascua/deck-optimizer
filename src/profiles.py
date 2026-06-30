@@ -1,6 +1,7 @@
 import json
 import logging
-from dataclasses import dataclass, asdict
+import os
+from dataclasses import dataclass, asdict, fields
 from pathlib import Path
 from typing import Optional
 
@@ -9,6 +10,8 @@ logger = logging.getLogger(__name__)
 CONFIG_DIR = Path.home() / ".config" / "deck-optimizer"
 PROFILES_PATH = CONFIG_DIR / "profiles.json"
 
+_KNOWN_FIELDS = None
+
 
 @dataclass
 class GameProfile:
@@ -16,7 +19,7 @@ class GameProfile:
     game_name: str
     learned_tdp: Optional[float]
     session_count: int
-    confidence: float  # 0.0 - 1.0
+    confidence: float
     target_fps: int = 40
     gpu_clock: Optional[int] = None
     fsr: Optional[bool] = None
@@ -40,20 +43,44 @@ class GameProfile:
     last_session_duration_min: Optional[float] = None
 
 
-def load_profiles() -> dict[str, GameProfile]:
-    if not PROFILES_PATH.exists():
-        return {}
-    try:
-        with open(PROFILES_PATH) as f:
-            data = json.load(f)
-        return {k: GameProfile(**v) for k, v in data.items()}
-    except (json.JSONDecodeError, TypeError) as e:
-        logger.error(f"Failed to load profiles: {e}")
-        return {}
+def _known_fields() -> set:
+    global _KNOWN_FIELDS
+    if _KNOWN_FIELDS is None:
+        _KNOWN_FIELDS = {f.name for f in fields(GameProfile)}
+    return _KNOWN_FIELDS
 
 
-def save_profiles(profiles: dict[str, GameProfile]) -> None:
-    PROFILES_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(PROFILES_PATH, "w") as f:
-        json.dump({k: asdict(v) for k, v in profiles.items()}, f, indent=2)
-    logger.debug(f"Saved {len(profiles)} profiles")
+def _load_profile(data: dict) -> GameProfile:
+    return GameProfile(**{k: v for k, v in data.items() if k in _known_fields()})
+
+
+class ProfileStore:
+    def __init__(self):
+        self._data: dict[str, GameProfile] = {}
+        self._load()
+
+    def _load(self) -> None:
+        if not PROFILES_PATH.exists():
+            return
+        try:
+            raw = json.loads(PROFILES_PATH.read_text())
+            self._data = {k: _load_profile(v) for k, v in raw.items()}
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.error(f"Failed to load profiles: {e}")
+
+    def save(self) -> None:
+        PROFILES_PATH.parent.mkdir(parents=True, exist_ok=True)
+        payload = json.dumps({k: asdict(v) for k, v in self._data.items()}, indent=2)
+        tmp = PROFILES_PATH.with_suffix(".tmp")
+        tmp.write_text(payload)
+        os.replace(tmp, PROFILES_PATH)
+        logger.debug(f"Saved {len(self._data)} profiles")
+
+    def get(self, app_id: str) -> Optional[GameProfile]:
+        return self._data.get(app_id)
+
+    def set(self, app_id: str, profile: GameProfile) -> None:
+        self._data[app_id] = profile
+
+    def all(self) -> dict[str, GameProfile]:
+        return self._data

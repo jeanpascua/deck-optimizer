@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from fps_monitor import SAMPLE_INTERVAL
 from game_detector import get_active_game
-from profiles import GameProfile, load_profiles, save_profiles
+from profiles import GameProfile, ProfileStore
 from perf_monitor import SessionMonitor
 from session_store import save_session
 from config import load_config
@@ -54,7 +54,7 @@ def main() -> None:
     global _active_monitor, _active_learner
     logger.info("deck-optimizer started")
 
-    profiles = load_profiles()
+    store = ProfileStore()
     current_app_id: Optional[str] = None
 
     while True:
@@ -62,7 +62,7 @@ def main() -> None:
 
         if result is None:
             if current_app_id is not None:
-                _on_game_exit(current_app_id, profiles)
+                _on_game_exit(current_app_id, store)
                 _active_monitor = None
                 _active_learner = None
                 current_app_id = None
@@ -71,15 +71,16 @@ def main() -> None:
 
             if app_id != current_app_id:
                 if current_app_id is not None:
-                    _on_game_exit(current_app_id, profiles)
+                    _on_game_exit(current_app_id, store)
 
                 current_app_id = app_id
-                _on_game_launch(app_id, game_name, profiles)
+                _on_game_launch(app_id, game_name, store)
                 _active_monitor = SessionMonitor()
                 if HAS_LEARNER:
                     try:
-                        _active_learner = TDPLearner(initial_tdp=profiles[app_id].learned_tdp)
-                        logger.info(f"TDPLearner started at {profiles[app_id].learned_tdp or 'MAX'}W")
+                        profile = store.get(app_id)
+                        _active_learner = TDPLearner(initial_tdp=profile.learned_tdp if profile else None)
+                        logger.info(f"TDPLearner started at {profile.learned_tdp or 'MAX'}W")
                     except Exception as e:
                         logger.warning(f"TDPLearner init failed: {e}")
                         _active_learner = None
@@ -91,10 +92,8 @@ def main() -> None:
         time.sleep(POLL_INTERVAL)
 
 
-def _on_game_launch(
-    app_id: str, game_name: str, profiles: dict[str, GameProfile]
-) -> None:
-    profile = profiles.get(app_id)
+def _on_game_launch(app_id: str, game_name: str, store: ProfileStore) -> None:
+    profile = store.get(app_id)
     if profile is None:
         profile = GameProfile(
             app_id=app_id,
@@ -103,17 +102,15 @@ def _on_game_launch(
             session_count=0,
             confidence=0.0,
         )
-        profiles[app_id] = profile
+        store.set(app_id, profile)
 
     if profile.settings_source is None and HAS_OPTIMIZER:
-        _fetch_settings(app_id, game_name, profile, profiles)
+        _fetch_settings(app_id, game_name, profile, store)
 
     _notify_discord(game_name, profile)
 
 
-def _fetch_settings(
-    app_id: str, game_name: str, profile: GameProfile, profiles: dict[str, GameProfile]
-) -> None:
+def _fetch_settings(app_id: str, game_name: str, profile: GameProfile, store: ProfileStore) -> None:
     logger.info(f"New game '{game_name}' — checking community settings...")
     community = get_community_settings(game_name, app_id=app_id)
 
@@ -122,17 +119,17 @@ def _fetch_settings(
         profile.settings_source = "community"
         _apply_settings(profile, community)
         logger.info(f"Community settings found for '{game_name}' ({len(useful_keys)} fields)")
-        save_profiles(profiles)
+        store.save()
         return
 
     logger.info(f"No community data — AI predicting for '{game_name}'...")
     try:
-        ai = predict_settings(app_id, game_name, profiles)
+        ai = predict_settings(app_id, game_name, store.all())
         if ai:
             profile.settings_source = "ai"
             _apply_settings(profile, ai)
             logger.info(f"AI predicted settings for '{game_name}'")
-            save_profiles(profiles)
+            store.save()
     except Exception as e:
         logger.warning(f"AI prediction failed: {e}")
 
@@ -256,9 +253,7 @@ def _profile_to_settings(profile: GameProfile) -> dict:
     }
 
 
-def _run_ai_analysis(
-    app_id: str, profile: GameProfile, stats, profiles: dict[str, GameProfile]
-) -> None:
+def _run_ai_analysis(app_id: str, profile: GameProfile, stats, store: ProfileStore) -> None:
     if not HAS_OPTIMIZER:
         return
     if stats.session_duration_min < 5:
@@ -283,7 +278,7 @@ def _run_ai_analysis(
     if confidence >= 0.85 and adjustments:
         _apply_settings(profile, adjustments)
         profile.settings_source = "ai_learned"
-        save_profiles(profiles)
+        store.save()
         applied = True
         logger.info(f"AI auto-applied settings for '{profile.game_name}' (confidence={confidence:.0%}): {adjustments}")
 
@@ -316,12 +311,9 @@ def _notify_discord_ai_recommendation(
         logger.warning(f"AI recommendation Discord failed: {e}")
 
 
-def _on_game_exit(
-    app_id: str,
-    profiles: dict[str, GameProfile],
-) -> None:
+def _on_game_exit(app_id: str, store: ProfileStore) -> None:
     global _active_monitor
-    existing = profiles.get(app_id)
+    existing = store.get(app_id)
     if existing is None:
         return
 
@@ -338,13 +330,13 @@ def _on_game_exit(
         existing.last_session_battery_drain = stats.battery_drain_pct
         existing.last_session_duration_min = stats.session_duration_min
         existing.session_count += 1
-        save_profiles(profiles)
+        store.save()
         _notify_discord_session_end(existing.game_name, existing, stats)
-        _run_ai_analysis(app_id, existing, stats, profiles)
+        _run_ai_analysis(app_id, existing, stats, store)
         logger.info(f"Session ended for '{existing.game_name}' (session #{existing.session_count})")
     else:
         existing.session_count += 1
-        save_profiles(profiles)
+        store.save()
         logger.info(f"Session ended for '{existing.game_name}' (no monitor)")
 
 
