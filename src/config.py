@@ -71,9 +71,27 @@ def setup_interactive() -> dict:
         config["display_model"] = display
         config["display_hz"] = 90 if display == "oled" else 60
 
-    ollama_model = input(f"Ollama model [{config['ollama_model']}]: ").strip()
-    if ollama_model:
-        config["ollama_model"] = ollama_model
+    try:
+        import subprocess
+        result = subprocess.run(["ollama", "list"], capture_output=True, text=True, timeout=5)
+        lines = [l.strip() for l in result.stdout.strip().splitlines()[1:] if l.strip()]
+        models = [l.split()[0] for l in lines if l]
+    except Exception:
+        models = []
+
+    if models:
+        print("Available Ollama models:")
+        for i, m in enumerate(models, 1):
+            print(f"  {i}) {m}")
+        choice = input(f"Ollama model (number or name) [{config['ollama_model']}]: ").strip()
+        if choice.isdigit() and 1 <= int(choice) <= len(models):
+            config["ollama_model"] = models[int(choice) - 1]
+        elif choice:
+            config["ollama_model"] = choice
+    else:
+        ollama_model = input(f"Ollama model [{config['ollama_model']}]: ").strip()
+        if ollama_model:
+            config["ollama_model"] = ollama_model
 
     save_config(config)
     print(f"\nConfig saved to {CONFIG_FILE}")
