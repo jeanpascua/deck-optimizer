@@ -15,8 +15,6 @@ logger = logging.getLogger(__name__)
 
 STEAM_LIBRARY = Path.home() / ".local" / "share" / "Steam" / "steamapps"
 SETTINGS_DIR = Path.home() / ".config" / "deck-auto-tdp" / "settings"
-OLLAMA_URL = "http://localhost:11434/api/generate"
-OLLAMA_MODEL = "qwen2.5:14b"
 
 
 def get_installed_games() -> list[dict]:
