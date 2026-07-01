@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 
 GPU_BUSY_PATH = Path("/sys/class/drm/card0/device/gpu_busy_percent")
 BATTERY_CAPACITY_PATH = Path("/sys/class/power_supply/BAT1/capacity")
-POWER_NOW_PATH = Path("/sys/class/power_supply/BAT1/power_now")
+BATTERY_VOLTAGE_PATH = Path("/sys/class/power_supply/BAT1/voltage_now")
+BATTERY_CURRENT_PATH = Path("/sys/class/power_supply/BAT1/current_now")
 THERMAL_PATHS = list(Path("/sys/class/thermal").glob("thermal_zone*/temp"))
 
 
@@ -72,9 +73,10 @@ def _read_temp() -> Optional[float]:
 
 
 def _read_power() -> Optional[float]:
-    val = _read_sysfs_float(POWER_NOW_PATH)
-    if val is not None:
-        return val / 1_000_000.0
+    v = _read_sysfs_float(BATTERY_VOLTAGE_PATH)
+    i = _read_sysfs_float(BATTERY_CURRENT_PATH)
+    if v is not None and i is not None:
+        return round((v * i) / 1e12, 2)
     return None
 
 
