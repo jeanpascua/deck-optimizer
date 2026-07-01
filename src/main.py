@@ -104,10 +104,10 @@ def _on_game_launch(app_id: str, game_name: str, store: ProfileStore) -> None:
         )
         store.set(app_id, profile)
 
+    _notify_discord(game_name, profile)
+
     if profile.settings_source is None and HAS_OPTIMIZER:
         _fetch_settings(app_id, game_name, profile, store)
-
-    _notify_discord(game_name, profile)
 
 
 def _fetch_settings(app_id: str, game_name: str, profile: GameProfile, store: ProfileStore) -> None:
