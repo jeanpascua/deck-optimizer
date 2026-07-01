@@ -4,7 +4,9 @@ from enum import Enum, auto
 from typing import Optional
 
 from fps_monitor import GPUMonitor, SATURATED_THRESHOLD, HEADROOM_THRESHOLD
-from tdp_controller import MIN_TDP, MAX_TDP, set_tdp
+
+MIN_TDP = 3.0
+MAX_TDP = 15.0
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +40,6 @@ class TDPLearner:
         self.tdp = _snap(start)
         self.state = State.WARMING_UP
         self.monitor = GPUMonitor(window_seconds=180)
-        set_tdp(self.tdp)
 
     def tick(self) -> None:
         """Call every SAMPLE_INTERVAL seconds while a game is running."""
@@ -104,7 +105,6 @@ class TDPLearner:
         new = _snap(self.tdp - STEP_DOWN)
         if new < self.tdp:
             self.tdp = new
-            set_tdp(self.tdp)
             self.monitor.reset()
             logger.info(f"Trying lower TDP: {self.tdp}W")
 
@@ -112,6 +112,5 @@ class TDPLearner:
         new = _snap(self.tdp + STEP_UP)
         if new > self.tdp:
             self.tdp = new
-            set_tdp(self.tdp)
             self.monitor.reset()
             logger.info(f"Boosting TDP: {self.tdp}W")

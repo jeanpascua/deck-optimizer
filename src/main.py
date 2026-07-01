@@ -31,7 +31,7 @@ except ImportError:
     HAS_LEARNER = False
 
 _config = load_config()
-WEBHOOK_FILE = Path(_config["discord_webhook_file"])
+WEBHOOK_FILE = Path(_config["discord_webhook_file"]).expanduser()
 LOG_PATH = Path.home() / ".local" / "share" / "deck-optimizer" / "service.log"
 LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 POLL_INTERVAL = SAMPLE_INTERVAL
