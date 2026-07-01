@@ -2,6 +2,7 @@
 """Performance monitoring during gameplay — GPU, power, temp, battery, FPS."""
 
 import logging
+import os
 import time
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
@@ -78,7 +79,6 @@ def _read_power() -> Optional[float]:
 
 
 def _read_fps() -> Optional[float]:
-    """Read FPS from gamescope stats file injected into game process environment."""
     try:
         for proc in Path("/proc").iterdir():
             if not proc.name.isdigit():
@@ -89,12 +89,14 @@ def _read_fps() -> Optional[float]:
                 stats_path = env.get("GAMESCOPE_STATS")
                 if not stats_path:
                     continue
-                stats_file = Path(stats_path)
-                if not stats_file.exists():
-                    continue
-                for line in stats_file.read_text().splitlines():
-                    if line.startswith("fps="):
-                        return float(line.split("=", 1)[1])
+                fd = os.open(stats_path, os.O_RDONLY | os.O_NONBLOCK)
+                try:
+                    data = os.read(fd, 4096).decode("utf-8", errors="ignore")
+                    for line in data.splitlines():
+                        if line.startswith("fps="):
+                            return float(line.split("=", 1)[1])
+                finally:
+                    os.close(fd)
             except (PermissionError, ValueError, OSError):
                 continue
     except Exception:
