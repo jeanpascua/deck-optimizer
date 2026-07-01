@@ -3,6 +3,7 @@ import json
 import logging
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import asdict
 from pathlib import Path
@@ -104,8 +105,11 @@ def _on_game_launch(app_id: str, game_name: str, store: ProfileStore) -> None:
         )
         store.set(app_id, profile)
 
-    _notify_discord(game_name, profile)
+    threading.Thread(target=_launch_background, args=(app_id, game_name, profile, store), daemon=True).start()
 
+
+def _launch_background(app_id: str, game_name: str, profile: GameProfile, store: ProfileStore) -> None:
+    _notify_discord(game_name, profile)
     if profile.settings_source is None and HAS_OPTIMIZER:
         _fetch_settings(app_id, game_name, profile, store)
 
@@ -311,6 +315,11 @@ def _notify_discord_ai_recommendation(
         logger.warning(f"AI recommendation Discord failed: {e}")
 
 
+def _exit_background(app_id: str, profile: GameProfile, stats, store: ProfileStore) -> None:
+    _notify_discord_session_end(profile.game_name, profile, stats)
+    _run_ai_analysis(app_id, profile, stats, store)
+
+
 def _on_game_exit(app_id: str, store: ProfileStore) -> None:
     global _active_monitor
     existing = store.get(app_id)
@@ -331,9 +340,8 @@ def _on_game_exit(app_id: str, store: ProfileStore) -> None:
         existing.last_session_duration_min = stats.session_duration_min
         existing.session_count += 1
         store.save()
-        _notify_discord_session_end(existing.game_name, existing, stats)
-        _run_ai_analysis(app_id, existing, stats, store)
         logger.info(f"Session ended for '{existing.game_name}' (session #{existing.session_count})")
+        threading.Thread(target=_exit_background, args=(app_id, existing, stats, store), daemon=True).start()
     else:
         existing.session_count += 1
         store.save()
