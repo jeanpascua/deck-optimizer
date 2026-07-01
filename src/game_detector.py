@@ -24,7 +24,7 @@ def get_active_game() -> Optional[tuple[str, str]]:
             app_id = env.get("SteamAppId", "0").strip()
             if app_id and app_id != "0":
                 return app_id, _get_game_name(app_id)
-        except (PermissionError, FileNotFoundError, ValueError):
+        except (OSError, ValueError):
             continue
     return None
 

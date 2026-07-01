@@ -51,44 +51,52 @@ _active_monitor: Optional[SessionMonitor] = None
 _active_learner: Optional["TDPLearner"] = None
 
 
+REQUIRED_CONFIRMATIONS = 2  # consecutive polls a detection must hold before it's trusted
+
+
 def main() -> None:
     global _active_monitor, _active_learner
     logger.info("deck-optimizer started")
 
     store = ProfileStore()
     current_app_id: Optional[str] = None
+    pending_id: Optional[str] = None
+    pending_name: str = ""
+    pending_streak = 0
 
     while True:
         result = get_active_game()
+        detected_id = result[0] if result else None
+        detected_name = result[1] if result else ""
 
-        if result is None:
+        if detected_id == pending_id:
+            pending_streak += 1
+        else:
+            pending_id, pending_name, pending_streak = detected_id, detected_name, 1
+
+        if pending_streak >= REQUIRED_CONFIRMATIONS and pending_id != current_app_id:
             if current_app_id is not None:
                 _on_game_exit(current_app_id, store)
                 _active_monitor = None
                 _active_learner = None
-                current_app_id = None
-        else:
-            app_id, game_name = result
 
-            if app_id != current_app_id:
-                if current_app_id is not None:
-                    _on_game_exit(current_app_id, store)
+            current_app_id = pending_id
 
-                current_app_id = app_id
-                _on_game_launch(app_id, game_name, store)
+            if current_app_id is not None:
+                _on_game_launch(current_app_id, pending_name, store)
                 _active_monitor = SessionMonitor()
                 if HAS_LEARNER:
                     try:
-                        profile = store.get(app_id)
+                        profile = store.get(current_app_id)
                         _active_learner = TDPLearner(initial_tdp=profile.learned_tdp if profile else None)
                         logger.info(f"TDPLearner started at {profile.learned_tdp or 'MAX'}W")
                     except Exception as e:
                         logger.warning(f"TDPLearner init failed: {e}")
                         _active_learner = None
-            elif _active_monitor is not None:
-                _active_monitor.sample()
-                if _active_learner is not None:
-                    _active_learner.tick()
+        elif detected_id == current_app_id and current_app_id is not None and _active_monitor is not None:
+            _active_monitor.sample()
+            if _active_learner is not None:
+                _active_learner.tick()
 
         time.sleep(POLL_INTERVAL)
 
