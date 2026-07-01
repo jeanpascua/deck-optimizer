@@ -12,8 +12,8 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 GPU_BUSY_PATH = Path("/sys/class/drm/card0/device/gpu_busy_percent")
-BATTERY_CAPACITY_PATH = Path("/sys/class/power_supply/BAT0/capacity")
-POWER_NOW_PATH = Path("/sys/class/power_supply/BAT0/power_now")
+BATTERY_CAPACITY_PATH = Path("/sys/class/power_supply/BAT1/capacity")
+POWER_NOW_PATH = Path("/sys/class/power_supply/BAT1/power_now")
 THERMAL_PATHS = list(Path("/sys/class/thermal").glob("thermal_zone*/temp"))
 
 
