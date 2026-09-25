@@ -179,9 +179,9 @@ def analyze_session(app_id: str, game_name: str, current_settings: dict,
 
     fps_rules = ""
     if session_stats.get("fps_avg") is not None:
-        fps_rules = f"""- fps_avg vs fps_limit: if fps_avg < fps_limit * 0.85, game can't hit target — lower fps_limit or raise TDP
+        fps_rules = f"""- fps_avg vs fps_limit: if fps_avg < fps_limit * 0.85, game can't hit target — lower fps_limit or enable fsr
 - fps_avg > fps_limit * 0.98 and GPU avg < 60% = fps_limit too conservative, could raise it
-- fps_min far below fps_avg = stuttering, raise TDP or lower gpu_clock
+- fps_min far below fps_avg = stuttering, lower fps_limit or enable fsr/half_rate_shading
 """
 
     prompt = f"""You are a Steam Deck optimization expert analyzing a gameplay session.
@@ -193,15 +193,15 @@ Session performance: {json.dumps(session_stats)}
 {sd_context}
 
 Rules:
-- GPU avg < 60% and TDP > 6W = TDP too high, lower it
-- GPU avg > 90% = GPU bottlenecked, raise TDP or lower graphics
-- Temp avg > 80°C = overheating, lower TDP/GPU clock
-- Battery drain > 50% in < 60 min = poor battery life, lower TDP
+- TDP is managed by a separate measurement-based learner. NEVER include "tdp" in adjustments; treat it as fixed.
+- GPU avg > 90% = GPU bottlenecked, lower graphics load (fsr, half_rate_shading, fps_limit)
+- Temp avg > 80°C = overheating, lower gpu_clock or fps_limit
+- Battery drain > 50% in < 60 min = poor battery life, lower fps_limit or gpu_clock
 - If ShareDeck data available, prefer their tested values
 {fps_rules}
 Output ONLY valid JSON:
 {{
-  "adjustments": {{only include fields that should change, e.g. "tdp": 10, "fps_limit": 30}},
+  "adjustments": {{only include fields that should change, e.g. "fps_limit": 30, "fsr": true}},
   "recommendation": "<1-2 sentences explaining what to change and why>",
   "confidence": <0.0-1.0>
 }}"""
@@ -217,6 +217,9 @@ Output ONLY valid JSON:
         json_match = raw[raw.find("{"):raw.rfind("}") + 1]
         if json_match:
             result = json.loads(json_match)
+            # TDP belongs to the TDPLearner (measured); drop it even if the model ignores the prompt
+            if isinstance(result.get("adjustments"), dict) and result["adjustments"].pop("tdp", None) is not None:
+                logger.info(f"Dropped AI TDP suggestion for '{game_name}' (learner owns TDP)")
             logger.info(f"AI session analysis for '{game_name}': {result}")
             return result
     except Exception as e:
