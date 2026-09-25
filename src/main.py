@@ -307,7 +307,8 @@ def _run_ai_analysis(app_id: str, profile: GameProfile, stats, store: ProfileSto
         profile.pending_streak = 0
         store.save()
 
-    if confidence >= 0.7 and recommendation:
+    # Skip "No change" verdicts; the session-end embed already covers those sessions
+    if confidence >= 0.7 and recommendation and adjustments:
         _notify_discord_ai_recommendation(profile.game_name, recommendation, adjustments, confidence, applied)
 
 

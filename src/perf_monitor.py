@@ -3,6 +3,8 @@
 
 import logging
 import os
+import select
+import threading
 import time
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
@@ -80,30 +82,109 @@ def _read_power() -> Optional[float]:
     return None
 
 
-def _read_fps() -> Optional[float]:
-    try:
-        for proc in Path("/proc").iterdir():
-            if not proc.name.isdigit():
+FPS_STALE_SECONDS = 5.0
+
+
+class _GamescopeStatsReader:
+    """Keeps gamescope's stats FIFO open in a background thread.
+
+    gamescope only writes `fps=` / `focus=` lines while a reader holds the pipe open,
+    so a one-shot open/read/close almost always comes back empty."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._fps: Optional[float] = None
+        self._fps_time = 0.0
+        self._focus: Optional[str] = None
+        self._thread: Optional[threading.Thread] = None
+
+    def start(self) -> None:
+        if self._thread is None:
+            self._thread = threading.Thread(target=self._run, name="gamescope-stats", daemon=True)
+            self._thread.start()
+
+    def latest(self) -> Optional[float]:
+        with self._lock:
+            if self._fps is None or time.monotonic() - self._fps_time > FPS_STALE_SECONDS:
+                return None
+            if self._focus == "steam":  # Steam UI / overlay has focus, not the game
+                return None
+            return self._fps
+
+    def _run(self) -> None:
+        while True:
+            path = _find_stats_pipe()
+            if path is None:
+                time.sleep(5)
                 continue
             try:
-                environ = (proc / "environ").read_bytes().decode("utf-8", errors="ignore")
-                env = dict(v.split("=", 1) for v in environ.split("\x00") if "=" in v)
-                stats_path = env.get("GAMESCOPE_STATS")
-                if not stats_path:
+                self._read_pipe(path)
+            except OSError as e:
+                logger.debug(f"gamescope stats pipe error: {e}")
+            time.sleep(1)
+
+    def _read_pipe(self, path: str) -> None:
+        # Non-blocking open so we never hang if gamescope isn't running; select() waits for data
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+        buf = b""
+        try:
+            while True:
+                ready, _, _ = select.select([fd], [], [], 10)
+                if not ready:
+                    if not os.path.exists(path):
+                        return  # gamescope restarted with a new runtime dir
                     continue
-                fd = os.open(stats_path, os.O_RDONLY | os.O_NONBLOCK)
+                chunk = os.read(fd, 4096)
+                if not chunk:
+                    return  # no writer (EOF); reopen after a pause
+                buf += chunk
+                *lines, buf = buf.split(b"\n")
+                for line in lines:
+                    self._handle(line.decode("utf-8", errors="ignore").strip())
+        finally:
+            os.close(fd)
+
+    def _handle(self, line: str) -> None:
+        key, sep, val = line.partition("=")
+        if not sep:
+            return
+        with self._lock:
+            if key == "fps":
                 try:
-                    data = os.read(fd, 4096).decode("utf-8", errors="ignore")
-                    for line in data.splitlines():
-                        if line.startswith("fps="):
-                            return float(line.split("=", 1)[1])
-                finally:
-                    os.close(fd)
-            except (PermissionError, ValueError, OSError):
-                continue
-    except Exception:
-        pass
+                    self._fps = float(val)
+                    self._fps_time = time.monotonic()
+                except ValueError:
+                    pass
+            elif key == "focus":
+                self._focus = val
+
+
+def _find_stats_pipe() -> Optional[str]:
+    # Stable symlink gamescope-session creates to the current runtime dir
+    stable = Path(f"/run/user/{os.getuid()}/gamescope-stats/stats.pipe")
+    if stable.exists():
+        return str(stable)
+    # Fallback: GAMESCOPE_STATS from any of our own processes' environment
+    for proc in Path("/proc").iterdir():
+        if not proc.name.isdigit():
+            continue
+        try:
+            environ = (proc / "environ").read_bytes()
+        except OSError:
+            continue
+        for var in environ.split(b"\0"):
+            if var.startswith(b"GAMESCOPE_STATS="):
+                path = var.split(b"=", 1)[1].decode("utf-8", errors="ignore")
+                if Path(path).exists():
+                    return path
     return None
+
+
+_stats_reader = _GamescopeStatsReader()
+
+
+def _read_fps() -> Optional[float]:
+    return _stats_reader.latest()
 
 
 class SessionMonitor:
@@ -112,6 +193,7 @@ class SessionMonitor:
         self._start_iso = datetime.now(timezone.utc).isoformat()
         self._samples: list[PerfSample] = []
         self._battery_start = _read_sysfs_int(BATTERY_CAPACITY_PATH)
+        _stats_reader.start()
 
     def sample(self) -> None:
         s = PerfSample(
