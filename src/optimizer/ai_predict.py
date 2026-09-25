@@ -153,6 +153,58 @@ Output ONLY valid JSON. Give single values, NOT ranges:
     return {}
 
 
+# Thresholds the model is told about but doesn't reliably follow — enforced in code instead
+TEMP_HOT_C = 80
+FAST_DRAIN_PCT_PER_HOUR = 50
+GPU_BOTTLENECK_PCT = 90
+GPU_IDLE_PCT = 60
+
+
+def _enforce_rules(adjustments: dict, current: dict, stats: dict) -> tuple[dict, list[str]]:
+    """Keep only adjustments the session metrics actually justify. Returns (kept, dropped reasons)."""
+    temp = stats.get("temp_c_avg")
+    gpu = stats.get("gpu_busy_avg")
+    drain = stats.get("battery_drain_pct")
+    minutes = stats.get("session_duration_min") or 0
+    fps_avg, fps_min = stats.get("fps_avg"), stats.get("fps_min")
+    limit = current.get("fps_limit")
+
+    hot = temp is not None and temp > TEMP_HOT_C
+    fast_drain = drain is not None and minutes >= 10 and drain / minutes * 60 > FAST_DRAIN_PCT_PER_HOUR
+    bottleneck = gpu is not None and gpu > GPU_BOTTLENECK_PCT
+    missing_target = bool(fps_avg and limit) and fps_avg < limit * 0.85
+    stutter = bool(fps_avg and fps_min) and fps_min < fps_avg * 0.6
+    headroom = bool(fps_avg and limit) and fps_avg > limit * 0.98 and gpu is not None and gpu < GPU_IDLE_PCT
+
+    def direction(key, new):
+        old = current.get(key)
+        try:
+            return (float(new) > float(old)) - (float(new) < float(old))
+        except (TypeError, ValueError):
+            return None  # no current value to compare against
+
+    kept, dropped = {}, []
+    for key, new in adjustments.items():
+        d = direction(key, new) if key in ("gpu_clock", "fps_limit") else None
+        if key == "gpu_clock" and d == -1:
+            ok = hot or fast_drain
+        elif key == "gpu_clock" and d == 1:
+            ok = bottleneck and not hot
+        elif key == "fps_limit" and d == -1:
+            ok = hot or fast_drain or bottleneck or missing_target or stutter
+        elif key == "fps_limit" and d == 1:
+            ok = headroom
+        elif key in ("fsr", "half_rate_shading") and new is True and not current.get(key):
+            ok = hot or fast_drain or bottleneck or missing_target or stutter
+        else:
+            ok = True
+        if ok:
+            kept[key] = new
+        else:
+            dropped.append(f"{key} {current.get(key)}->{new}")
+    return kept, dropped
+
+
 def analyze_session(app_id: str, game_name: str, current_settings: dict,
                     session_stats: dict, sharedeck_data: dict = None,
                     session_history: list = None) -> dict:
@@ -220,6 +272,19 @@ Output ONLY valid JSON:
             # TDP belongs to the TDPLearner (measured); drop it even if the model ignores the prompt
             if isinstance(result.get("adjustments"), dict) and result["adjustments"].pop("tdp", None) is not None:
                 logger.info(f"Dropped AI TDP suggestion for '{game_name}' (learner owns TDP)")
+            if isinstance(result.get("adjustments"), dict) and result["adjustments"]:
+                kept, dropped = _enforce_rules(result["adjustments"], current_settings, session_stats)
+                if dropped:
+                    logger.info(f"Dropped unjustified AI adjustments for '{game_name}': {dropped}")
+                    result["adjustments"] = kept
+                    if not kept:
+                        result["recommendation"] = (
+                            f"No change: AI suggested {', '.join(dropped)}, but the session metrics don't "
+                            f"justify it (temp avg {session_stats.get('temp_c_avg')}°C, "
+                            f"GPU avg {session_stats.get('gpu_busy_avg')}%, "
+                            f"battery -{session_stats.get('battery_drain_pct')}% in "
+                            f"{session_stats.get('session_duration_min')}min)."
+                        )
             logger.info(f"AI session analysis for '{game_name}': {result}")
             return result
     except Exception as e:
