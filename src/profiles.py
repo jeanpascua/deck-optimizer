@@ -41,6 +41,8 @@ class GameProfile:
     last_session_temp_avg: Optional[float] = None
     last_session_battery_drain: Optional[int] = None
     last_session_duration_min: Optional[float] = None
+    pending_adjustment: Optional[dict] = None
+    pending_streak: int = 0
 
 
 def _known_fields() -> set:
@@ -84,3 +86,43 @@ class ProfileStore:
 
     def all(self) -> dict[str, GameProfile]:
         return self._data
+
+
+def profile_to_settings(profile: GameProfile) -> dict:
+    return {
+        "tdp": profile.learned_tdp,
+        "fps_limit": profile.target_fps,
+        "gpu_clock": profile.gpu_clock,
+        "fsr": profile.fsr,
+        "half_rate_shading": profile.half_rate_shading,
+        "allow_tearing": profile.allow_tearing,
+        "disable_frame_limit": profile.disable_frame_limit,
+        "scaling_mode": profile.scaling_mode,
+        "scaling_filter": profile.scaling_filter,
+        "sharpness": profile.sharpness,
+    }
+
+
+def apply_settings(profile: GameProfile, settings: dict) -> None:
+    for field in ["gpu_clock", "fsr", "half_rate_shading", "allow_tearing",
+                  "disable_frame_limit", "scaling_mode", "scaling_filter", "sharpness"]:
+        val = settings.get(field)
+        if val is not None:
+            if field == "gpu_clock":
+                val = max(200, min(1600, round(int(val) / 100) * 100))
+            setattr(profile, field, val)
+    if profile.scaling_filter == "sharp" and profile.sharpness is None:
+        profile.sharpness = 3
+    if settings.get("tdp"):
+        tdp = settings["tdp"]
+        if isinstance(tdp, str):
+            try:
+                tdp = int(tdp.split("-")[0])
+            except ValueError:
+                return
+        profile.learned_tdp = max(3.0, min(15.0, float(tdp)))
+    if settings.get("fps_limit"):
+        try:
+            profile.target_fps = int(settings["fps_limit"])
+        except (ValueError, TypeError):
+            pass

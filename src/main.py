@@ -13,9 +13,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from fps_monitor import SAMPLE_INTERVAL
 from game_detector import get_active_game
-from profiles import GameProfile, ProfileStore
+from profiles import GameProfile, ProfileStore, apply_settings, profile_to_settings
 from perf_monitor import SessionMonitor
-from session_store import save_session
+from session_store import save_session, load_sessions
 from config import load_config
 
 try:
@@ -52,6 +52,8 @@ _active_learner: Optional["TDPLearner"] = None
 
 
 REQUIRED_CONFIRMATIONS = 2  # consecutive polls a detection must hold before it's trusted
+REQUIRED_AI_CONFIRMATIONS = 2   # consecutive sessions an AI adjustment must repeat before auto-applying
+AI_CONFIDENCE_FLOOR = 0.6       # below this, don't even count toward the streak
 
 
 def main() -> None:
@@ -129,46 +131,21 @@ def _fetch_settings(app_id: str, game_name: str, profile: GameProfile, store: Pr
     useful_keys = [k for k in community if k not in ("source",) and community[k] is not None]
     if community and len(useful_keys) >= 3:
         profile.settings_source = "community"
-        _apply_settings(profile, community)
+        apply_settings(profile, community)
         logger.info(f"Community settings found for '{game_name}' ({len(useful_keys)} fields)")
         store.save()
         return
 
     logger.info(f"No community data — AI predicting for '{game_name}'...")
     try:
-        ai = predict_settings(app_id, game_name, store.all())
+        ai = predict_settings(app_id, game_name, store.all(), session_history=load_sessions(app_id))
         if ai:
             profile.settings_source = "ai"
-            _apply_settings(profile, ai)
+            apply_settings(profile, ai)
             logger.info(f"AI predicted settings for '{game_name}'")
             store.save()
     except Exception as e:
         logger.warning(f"AI prediction failed: {e}")
-
-
-def _apply_settings(profile: GameProfile, settings: dict) -> None:
-    for field in ["gpu_clock", "fsr", "half_rate_shading", "allow_tearing",
-                   "disable_frame_limit", "scaling_mode", "scaling_filter", "sharpness"]:
-        val = settings.get(field)
-        if val is not None:
-            if field == "gpu_clock":
-                val = max(200, min(1600, round(int(val) / 100) * 100))
-            setattr(profile, field, val)
-    if profile.scaling_filter == "sharp" and profile.sharpness is None:
-        profile.sharpness = 3
-    if settings.get("tdp"):
-        tdp = settings["tdp"]
-        if isinstance(tdp, str):
-            try:
-                tdp = int(tdp.split("-")[0])
-            except ValueError:
-                return
-        profile.learned_tdp = max(3.0, min(15.0, float(tdp)))
-    if settings.get("fps_limit"):
-        try:
-            profile.target_fps = int(settings["fps_limit"])
-        except (ValueError, TypeError):
-            pass
 
 
 def _notify_discord(game_name: str, profile: GameProfile) -> None:
@@ -250,19 +227,20 @@ def _send_discord(webhook: str, payload_dict: dict) -> None:
     )
 
 
-def _profile_to_settings(profile: GameProfile) -> dict:
-    return {
-        "tdp": profile.learned_tdp,
-        "fps_limit": profile.target_fps,
-        "gpu_clock": profile.gpu_clock,
-        "fsr": profile.fsr,
-        "half_rate_shading": profile.half_rate_shading,
-        "allow_tearing": profile.allow_tearing,
-        "disable_frame_limit": profile.disable_frame_limit,
-        "scaling_mode": profile.scaling_mode,
-        "scaling_filter": profile.scaling_filter,
-        "sharpness": profile.sharpness,
-    }
+def _adjustment_direction(profile: GameProfile, adjustments: dict) -> dict:
+    """Reduce an adjustments dict to per-field direction so two sessions recommending
+    'lower TDP' compare equal even if the LLM picked slightly different numbers."""
+    current_settings = profile_to_settings(profile)  # adjustment keys are tdp/fps_limit, not profile field names
+    direction = {}
+    for key, val in adjustments.items():
+        current = current_settings.get(key)
+        if (isinstance(val, (int, float)) and not isinstance(val, bool)
+                and isinstance(current, (int, float)) and not isinstance(current, bool)):
+            diff = val - current
+            direction[key] = "up" if diff > 0 else "down" if diff < 0 else "same"
+        else:
+            direction[key] = val
+    return direction
 
 
 def _run_ai_analysis(app_id: str, profile: GameProfile, stats, store: ProfileStore) -> None:
@@ -272,9 +250,12 @@ def _run_ai_analysis(app_id: str, profile: GameProfile, stats, store: ProfileSto
         logger.info(f"Session too short ({stats.session_duration_min}min), skipping AI analysis")
         return
 
-    current_settings = _profile_to_settings(profile)
+    current_settings = profile_to_settings(profile)
     try:
-        result = analyze_session(app_id, profile.game_name, current_settings, asdict(stats))
+        result = analyze_session(
+            app_id, profile.game_name, current_settings, asdict(stats),
+            session_history=load_sessions(app_id),
+        )
     except Exception as e:
         logger.warning(f"AI analysis failed for '{profile.game_name}': {e}")
         return
@@ -287,12 +268,34 @@ def _run_ai_analysis(app_id: str, profile: GameProfile, stats, store: ProfileSto
     confidence = float(result.get("confidence", 0.0))
 
     applied = False
-    if confidence >= 0.85 and adjustments:
-        _apply_settings(profile, adjustments)
-        profile.settings_source = "ai_learned"
+    if adjustments and confidence >= AI_CONFIDENCE_FLOOR:
+        direction = _adjustment_direction(profile, adjustments)
+        if direction == profile.pending_adjustment:
+            profile.pending_streak += 1
+        else:
+            profile.pending_adjustment = direction
+            profile.pending_streak = 1
+
+        if profile.pending_streak >= REQUIRED_AI_CONFIRMATIONS:
+            apply_settings(profile, adjustments)
+            profile.settings_source = "ai_learned"
+            profile.pending_adjustment = None
+            profile.pending_streak = 0
+            applied = True
+            logger.info(
+                f"AI auto-applied settings for '{profile.game_name}' "
+                f"(confidence={confidence:.0%}, confirmed {REQUIRED_AI_CONFIRMATIONS}x): {adjustments}"
+            )
+        else:
+            logger.info(
+                f"AI suggests {adjustments} for '{profile.game_name}' "
+                f"(confidence={confidence:.0%}, streak={profile.pending_streak}/{REQUIRED_AI_CONFIRMATIONS}) — waiting for repeat"
+            )
         store.save()
-        applied = True
-        logger.info(f"AI auto-applied settings for '{profile.game_name}' (confidence={confidence:.0%}): {adjustments}")
+    elif profile.pending_adjustment is not None:
+        profile.pending_adjustment = None
+        profile.pending_streak = 0
+        store.save()
 
     if confidence >= 0.7 and recommendation:
         _notify_discord_ai_recommendation(profile.game_name, recommendation, adjustments, confidence, applied)
