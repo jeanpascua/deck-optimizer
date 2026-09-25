@@ -22,8 +22,10 @@ try:
     from optimizer.scraper import get_community_settings
     from optimizer.ai_predict import predict_settings, analyze_session
     HAS_OPTIMIZER = True
-except ImportError:
+    _OPTIMIZER_IMPORT_ERROR = None
+except ImportError as e:
     HAS_OPTIMIZER = False
+    _OPTIMIZER_IMPORT_ERROR = e
 
 try:
     from learner import TDPLearner
@@ -59,6 +61,8 @@ AI_CONFIDENCE_FLOOR = 0.6       # below this, don't even count toward the streak
 def main() -> None:
     global _active_monitor, _active_learner
     logger.info("deck-optimizer started")
+    if not HAS_OPTIMIZER:
+        logger.warning(f"AI/community optimizer disabled — import failed: {_OPTIMIZER_IMPORT_ERROR}")
 
     store = ProfileStore()
     current_app_id: Optional[str] = None

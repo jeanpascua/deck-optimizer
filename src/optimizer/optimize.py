@@ -4,12 +4,12 @@
 import json
 import logging
 import re
-import requests
 from pathlib import Path
 from typing import Optional
 
 from .scraper import get_community_settings
 from .ai_predict import predict_settings
+from .netutil import get_json
 
 logger = logging.getLogger(__name__)
 
@@ -33,12 +33,12 @@ def get_installed_games() -> list[dict]:
 
 def get_library_from_api(steam_id: str) -> list[dict]:
     try:
-        resp = requests.get(
+        data = get_json(
             f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/"
             f"?key=&steamid={steam_id}&include_appinfo=1&include_played_free_games=1",
             timeout=10,
         )
-        data = resp.json().get("response", {}).get("games", [])
+        data = data.get("response", {}).get("games", [])
         return [{"app_id": str(g["appid"]), "name": g.get("name", f"App_{g['appid']}")} for g in data]
     except Exception:
         return []

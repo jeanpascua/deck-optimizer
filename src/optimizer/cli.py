@@ -6,12 +6,12 @@ import json
 import logging
 import os
 import sys
-import requests
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent.parent))
 
 from optimizer.optimize import get_installed_games, optimize_game, optimize_library, format_discord
 from optimizer.ai_predict import analyze_session
+from optimizer.netutil import post_json
 from profiles import ProfileStore, apply_settings, profile_to_settings
 from session_store import load_sessions
 
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 def post_discord(messages: list[str], webhook_url: str):
     for msg in messages:
-        requests.post(webhook_url, json={"content": msg}, timeout=10)
+        post_json(webhook_url, {"content": msg}, timeout=10)
 
 
 def main():

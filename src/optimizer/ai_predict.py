@@ -6,11 +6,11 @@ import logging
 import subprocess
 import sys
 from pathlib import Path
-import requests
 from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import load_config
+from optimizer.netutil import get_json, post_json
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +22,11 @@ STEAM_API = "https://store.steampowered.com/api/appdetails?appids={}"
 
 def get_steam_info(app_id: str) -> dict:
     try:
-        resp = requests.get(STEAM_API.format(app_id), timeout=10)
-        data = resp.json()
-        if data.get(app_id, {}).get("success"):
-            info = data[app_id]["data"]
+        data = get_json(STEAM_API.format(app_id), timeout=10)
+        # Steam sometimes keys the response by a different (parent) appid, e.g. 582010 -> 1390430
+        entry = data.get(app_id) or next(iter(data.values()), {})
+        if entry.get("success"):
+            info = entry["data"]
             return {
                 "name": info.get("name", ""),
                 "genres": [g["description"] for g in info.get("genres", [])],
@@ -132,13 +133,13 @@ Output ONLY valid JSON. Give single values, NOT ranges:
 }}"""
 
     try:
-        resp = requests.post(OLLAMA_URL, json={
+        resp = post_json(OLLAMA_URL, {
             "model": OLLAMA_MODEL,
             "prompt": prompt,
             "stream": False,
             "options": {"temperature": 0.3, "num_predict": 200},
         }, timeout=30)
-        raw = resp.json().get("response", "")
+        raw = resp.get("response", "")
 
         json_match = raw[raw.find("{"):raw.rfind("}") + 1]
         if json_match:
@@ -206,13 +207,13 @@ Output ONLY valid JSON:
 }}"""
 
     try:
-        resp = requests.post(OLLAMA_URL, json={
+        resp = post_json(OLLAMA_URL, {
             "model": OLLAMA_MODEL,
             "prompt": prompt,
             "stream": False,
             "options": {"temperature": 0.3, "num_predict": 200},
         }, timeout=30)
-        raw = resp.json().get("response", "")
+        raw = resp.get("response", "")
         json_match = raw[raw.find("{"):raw.rfind("}") + 1]
         if json_match:
             result = json.loads(json_match)

@@ -30,7 +30,6 @@ You apply the settings yourself via the Quick Access Menu (`...` button). Steam'
 - Python 3.10+
 - [Ollama](https://ollama.com) with a model (e.g. `qwen2.5:14b`)
 - SSH access to your Deck
-- `pip install -r requirements.txt`
 
 ## Install
 
@@ -66,7 +65,6 @@ On your PC:
 ```bash
 git clone https://github.com/jeanpascua/deck-optimizer ~/projects/deck-optimizer
 cd ~/projects/deck-optimizer
-pip install -r requirements.txt
 ollama pull qwen2.5:14b
 python3 src/config.py  # interactive setup
 ```
