@@ -130,7 +130,11 @@ def _launch_background(app_id: str, game_name: str, profile: GameProfile, store:
 
 def _fetch_settings(app_id: str, game_name: str, profile: GameProfile, store: ProfileStore) -> None:
     logger.info(f"New game '{game_name}' — checking community settings...")
+    # If the TDP learner already has real sessions, its measured TDP beats a lookup/guess
+    keep_tdp = bool(load_sessions(app_id))
     community = get_community_settings(game_name, app_id=app_id)
+    if keep_tdp and community:
+        community.pop("tdp", None)
 
     useful_keys = [k for k in community if k not in ("source",) and community[k] is not None]
     if community and len(useful_keys) >= 3:
@@ -144,6 +148,8 @@ def _fetch_settings(app_id: str, game_name: str, profile: GameProfile, store: Pr
     try:
         ai = predict_settings(app_id, game_name, store.all(), session_history=load_sessions(app_id))
         if ai:
+            if keep_tdp:
+                ai.pop("tdp", None)
             profile.settings_source = "ai"
             apply_settings(profile, ai)
             logger.info(f"AI predicted settings for '{game_name}'")

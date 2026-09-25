@@ -33,8 +33,10 @@ def main():
     parser.add_argument("--app-id", help="Optimize a single game by Steam app ID")
     parser.add_argument("--library", action="store_true", help="Optimize all installed games")
     parser.add_argument("--analyze", action="store_true",
-                         help="Run AI analysis now using recorded play sessions for --app-id, "
-                              "and apply the result immediately (bypasses the normal debounce)")
+                         help="Run AI analysis now using recorded play sessions for --app-id "
+                              "and show the recommendation (use --apply to save it)")
+    parser.add_argument("--apply", action="store_true",
+                        help="With --analyze: apply the recommendation immediately (bypasses the 2x confirmation)")
     parser.add_argument("--discord", action="store_true", help="Post results to Discord")
     parser.add_argument("--json", action="store_true", help="Output JSON")
     args = parser.parse_args()
@@ -78,9 +80,12 @@ def main():
             return
 
         before = current_settings  # already uses profile_to_settings' field naming (tdp, fps_limit, ...)
-        print("\nApplying:")
+        print("\nApplying:" if args.apply else "\nWould change (preview, re-run with --apply to save):")
         for k, v in adjustments.items():
             print(f"  {k}: {before.get(k, '?')} -> {v}")
+
+        if not args.apply:
+            return
 
         apply_settings(profile, adjustments)
         profile.settings_source = "ai_manual"
