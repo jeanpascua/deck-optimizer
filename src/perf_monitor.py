@@ -82,7 +82,7 @@ def _read_power() -> Optional[float]:
     return None
 
 
-FPS_STALE_SECONDS = 5.0
+FPS_STALE_SECONDS = 15.0  # gamescope writes fps every ~5s
 
 
 class _GamescopeStatsReader:
