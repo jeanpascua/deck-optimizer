@@ -58,6 +58,7 @@ _active_learner: Optional["TDPLearner"] = None
 REQUIRED_CONFIRMATIONS = 2  # consecutive polls a detection must hold before it's trusted
 REQUIRED_AI_CONFIRMATIONS = 2   # consecutive sessions an AI adjustment must repeat before auto-applying
 AI_CONFIDENCE_FLOOR = 0.6       # below this, don't even count toward the streak
+MIN_SESSION_MIN = 5             # shorter sessions (menus, loading) don't update learned TDP or run AI analysis
 
 
 def main() -> None:
@@ -272,7 +273,7 @@ def _adjustment_direction(profile: GameProfile, adjustments: dict) -> dict:
 def _run_ai_analysis(app_id: str, profile: GameProfile, stats, store: ProfileStore) -> None:
     if not HAS_OPTIMIZER:
         return
-    if stats.session_duration_min < 5:
+    if stats.session_duration_min < MIN_SESSION_MIN:
         logger.info(f"Session too short ({stats.session_duration_min}min), skipping AI analysis")
         return
 
@@ -365,11 +366,17 @@ def _on_game_exit(app_id: str, store: ProfileStore, notify: bool = True) -> None
         return
 
     if _active_monitor is not None:
+        stats = _active_monitor.summarize()
         if _active_learner is not None:
             learned_tdp = _active_learner.session_ended()
-            existing.learned_tdp = learned_tdp
-            logger.info(f"TDPLearner converged: {learned_tdp}W for '{existing.game_name}'")
-        stats = _active_monitor.summarize()
+            if stats.session_duration_min >= MIN_SESSION_MIN:
+                existing.learned_tdp = learned_tdp
+                logger.info(f"TDPLearner converged: {learned_tdp}W for '{existing.game_name}'")
+            else:
+                logger.info(
+                    f"Session too short ({stats.session_duration_min}min), keeping learned TDP "
+                    f"{existing.learned_tdp}W (session ended at {learned_tdp}W)"
+                )
         save_session(app_id, existing.game_name, stats)
         existing.last_session_gpu_avg = stats.gpu_busy_avg
         existing.last_session_power_avg = stats.power_watts_avg
