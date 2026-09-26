@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import logging
+import signal
 import subprocess
 import sys
 import threading
@@ -50,6 +51,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 _active_monitor: Optional[SessionMonitor] = None
+_current_app_id: Optional[str] = None  # mirrored from the poll loop for the shutdown save
 _active_learner: Optional["TDPLearner"] = None
 
 
@@ -59,12 +61,25 @@ AI_CONFIDENCE_FLOOR = 0.6       # below this, don't even count toward the streak
 
 
 def main() -> None:
-    global _active_monitor, _active_learner
     logger.info("deck-optimizer started")
     if not HAS_OPTIMIZER:
         logger.warning(f"AI/community optimizer disabled — import failed: {_OPTIMIZER_IMPORT_ERROR}")
 
+    # systemd stops us with SIGTERM on shutdown; turn it into SystemExit so the
+    # finally below saves the running session instead of dropping it
+    signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
+
     store = ProfileStore()
+    try:
+        _poll_loop(store)
+    finally:
+        if _current_app_id is not None:
+            logger.info("Shutting down mid-game, saving session")
+            _on_game_exit(_current_app_id, store, notify=False)
+
+
+def _poll_loop(store: ProfileStore) -> None:
+    global _active_monitor, _active_learner, _current_app_id
     current_app_id: Optional[str] = None
     pending_id: Optional[str] = None
     pending_name: str = ""
@@ -87,6 +102,7 @@ def main() -> None:
                 _active_learner = None
 
             current_app_id = pending_id
+            _current_app_id = current_app_id
 
             if current_app_id is not None:
                 _on_game_launch(current_app_id, pending_name, store)
@@ -342,7 +358,7 @@ def _exit_background(app_id: str, profile: GameProfile, stats, store: ProfileSto
     _run_ai_analysis(app_id, profile, stats, store)
 
 
-def _on_game_exit(app_id: str, store: ProfileStore) -> None:
+def _on_game_exit(app_id: str, store: ProfileStore, notify: bool = True) -> None:
     global _active_monitor
     existing = store.get(app_id)
     if existing is None:
@@ -363,7 +379,8 @@ def _on_game_exit(app_id: str, store: ProfileStore) -> None:
         existing.session_count += 1
         store.save()
         logger.info(f"Session ended for '{existing.game_name}' (session #{existing.session_count})")
-        threading.Thread(target=_exit_background, args=(app_id, existing, stats, store), daemon=True).start()
+        if notify:  # skipped on shutdown: network is going away and daemon threads die with us
+            threading.Thread(target=_exit_background, args=(app_id, existing, stats, store), daemon=True).start()
     else:
         existing.session_count += 1
         store.save()
