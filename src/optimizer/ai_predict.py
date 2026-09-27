@@ -74,7 +74,6 @@ Steam Deck hardware (2026):
 - RAM: 16GB LPDDR5
 - Display: 1280x800 LCD 60Hz max
 - TDP range: 4W-15W (battery life vs performance tradeoff)
-- FSR: system-level toggle, upscales from lower res
 - Half Rate Shading: reduces texture quality for FPS boost
 - SteamOS (Linux, Proton for Windows games)
 
@@ -98,7 +97,7 @@ FPS limit:
 - Light/2D/indie: 60fps
 - Allowed: 15, 30, 40, 60
 
-FSR: true ONLY for demanding 3D games. false for 2D/pixel/retro — they run at native res fine.
+{STEAM_MENU_OPTIONS}
 Half Rate Shading: true ONLY as last resort for heaviest games. false for everything else.
 Allow Tearing: true for competitive/fast-paced. false for casual/story/turn-based.
 Disable Frame Limit: false always unless benchmarking.
@@ -117,7 +116,6 @@ Output ONLY valid JSON. Give single values, NOT ranges:
   "tdp": <single number 4-15>,
   "gpu_clock": <single number 200-1600>,
   "fps_limit": <15 or 30 or 40 or 60>,
-  "fsr": <true/false>,
   "half_rate_shading": <true/false>,
   "allow_tearing": <true/false>,
   "disable_frame_limit": <true/false>,
@@ -143,7 +141,7 @@ Output ONLY valid JSON. Give single values, NOT ranges:
 
         json_match = raw[raw.find("{"):raw.rfind("}") + 1]
         if json_match:
-            settings = json.loads(json_match)
+            settings = _normalize_to_menu(json.loads(json_match))
             settings["source"] = "ai_prediction"
             logger.info(f"AI predicted settings for '{game_name}': {settings}")
             return settings
@@ -151,6 +149,42 @@ Output ONLY valid JSON. Give single values, NOT ranges:
         logger.warning(f"AI prediction failed for '{game_name}': {e}")
 
     return {}
+
+
+# The Steam Deck Quick Access > Performance menu (SteamOS 3.8) — the only values the AI may suggest
+STEAM_MENU_OPTIONS = """Steam Deck Quick Access > Performance menu (SteamOS 3.8). Use ONLY these keys and values:
+- fps_limit: 10-60
+- half_rate_shading: true/false
+- allow_tearing: true/false
+- gpu_clock: 200-1600 (MHz, Manual GPU Clock)
+- scaling_mode: auto, integer, fit, stretch, fill
+- scaling_filter: linear, pixel, sharp ("sharp" is AMD FSR upscaling; there is NO separate "fsr" setting)
+- sharpness: 0-5, only with scaling_filter "sharp" (5 = strongest sharpening)
+"sharp" only helps when the game renders below 1280x800 (lower the in-game resolution). For 2D/pixel-art games use scaling_filter "pixel" (optionally scaling_mode "integer"), never "sharp"."""
+SCALING_MODES = {"auto", "integer", "fit", "stretch", "fill"}
+SCALING_FILTERS = {"linear", "pixel", "sharp"}
+
+
+def _normalize_to_menu(settings: dict) -> dict:
+    """Map old-style "fsr" to the menu's scaling_filter and drop values the Deck menu doesn't have."""
+    out = dict(settings)
+    fsr = out.pop("fsr", None)
+    if fsr is True and "scaling_filter" not in out:
+        out["scaling_filter"] = "sharp"
+    if "scaling_filter" in out and str(out["scaling_filter"]).lower() not in SCALING_FILTERS:
+        out.pop("scaling_filter")
+    elif "scaling_filter" in out:
+        out["scaling_filter"] = str(out["scaling_filter"]).lower()
+    if "scaling_mode" in out and str(out["scaling_mode"]).lower() not in SCALING_MODES:
+        out.pop("scaling_mode")
+    elif "scaling_mode" in out:
+        out["scaling_mode"] = str(out["scaling_mode"]).lower()
+    if "sharpness" in out:
+        try:
+            out["sharpness"] = max(0, min(5, int(out["sharpness"])))
+        except (TypeError, ValueError):
+            out.pop("sharpness")
+    return out
 
 
 # Thresholds the model is told about but doesn't reliably follow — enforced in code instead
@@ -199,7 +233,8 @@ def _enforce_rules(adjustments: dict, current: dict, stats: dict) -> tuple[dict,
             ok = headroom
         elif key == "fps_limit" and d is None:
             ok = not smooth  # adding a cap where none was set
-        elif key in ("fsr", "half_rate_shading") and new is True and not current.get(key):
+        elif (key == "half_rate_shading" and new is True and not current.get(key)) or (
+                key == "scaling_filter" and new == "sharp" and current.get(key) != "sharp"):
             ok = (hot or fast_drain or bottleneck or missing_target or stutter) and not smooth
         else:
             ok = True
@@ -234,11 +269,12 @@ def analyze_session(app_id: str, game_name: str, current_settings: dict,
             "multiple sessions, be more confident, not less.\n"
         )
 
+    current_settings = _normalize_to_menu(current_settings)
     fps_rules = ""
     if session_stats.get("fps_avg") is not None:
-        fps_rules = f"""- fps_avg vs fps_limit: if fps_avg < fps_limit * 0.85, game can't hit target — lower fps_limit or enable fsr
+        fps_rules = f"""- fps_avg vs fps_limit: if fps_avg < fps_limit * 0.85, game can't hit target — lower fps_limit or set scaling_filter "sharp"
 - fps_avg > fps_limit * 0.98 and GPU avg < 60% = fps_limit too conservative, could raise it
-- fps_min far below fps_avg = stuttering, lower fps_limit or enable fsr/half_rate_shading
+- fps_min far below fps_avg = stuttering, lower fps_limit, set scaling_filter "sharp", or enable half_rate_shading
 """
 
     prompt = f"""You are a Steam Deck optimization expert analyzing a gameplay session.
@@ -249,17 +285,19 @@ Session performance: {json.dumps(session_stats)}
 {history_context}
 {sd_context}
 
+{STEAM_MENU_OPTIONS}
+
 Rules:
 - TDP is managed by a separate measurement-based learner. NEVER include "tdp" in adjustments; treat it as fixed.
-- GPU avg > 90% = GPU bottlenecked, lower graphics load (fsr, half_rate_shading, fps_limit)
+- GPU avg > 90% = GPU bottlenecked, lower graphics load (scaling_filter "sharp", half_rate_shading, fps_limit)
 - Temp avg > 80°C = overheating, lower gpu_clock or fps_limit
 - Battery drain > 50% in < 60 min = poor battery life, lower fps_limit or gpu_clock
 - If ShareDeck data available, prefer their tested values
 {fps_rules}
 Output ONLY valid JSON:
 {{
-  "adjustments": {{only include fields that should change, e.g. "fps_limit": 30, "fsr": true}},
-  "recommendation": "<1-2 sentences explaining what to change and why>",
+  "adjustments": {{only include fields that should change, e.g. "fps_limit": 30, "scaling_filter": "sharp"}},
+  "recommendation": "<1-2 sentences using the Steam menu names above (e.g. Scaling Filter: Sharp), explaining what to change and why>",
   "confidence": <0.0-1.0>
 }}"""
 
@@ -275,6 +313,8 @@ Output ONLY valid JSON:
         if json_match:
             result = json.loads(json_match)
             # TDP belongs to the TDPLearner (measured); drop it even if the model ignores the prompt
+            if isinstance(result.get("adjustments"), dict):
+                result["adjustments"] = _normalize_to_menu(result["adjustments"])
             if isinstance(result.get("adjustments"), dict) and result["adjustments"].pop("tdp", None) is not None:
                 logger.info(f"Dropped AI TDP suggestion for '{game_name}' (learner owns TDP)")
             if isinstance(result.get("adjustments"), dict) and result["adjustments"]:
