@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from fps_monitor import SAMPLE_INTERVAL
 from game_detector import get_active_game
 from profiles import GameProfile, ProfileStore, apply_settings, profile_to_settings
-from perf_monitor import SessionMonitor
+from perf_monitor import SessionMonitor, SessionStats
 from session_store import save_session, load_sessions
 from config import load_config
 
@@ -37,6 +37,8 @@ except ImportError:
 _config = load_config()
 WEBHOOK_FILE = Path(_config["discord_webhook_file"]).expanduser()
 LOG_PATH = Path.home() / ".local" / "share" / "deck-optimizer" / "service.log"
+PENDING_PATH = Path.home() / ".local" / "share" / "deck-optimizer" / "pending_analysis.json"
+PENDING_DELAY_S = 90  # after boot, give wifi + tailscale time to come up before calling Ollama
 LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 POLL_INTERVAL = SAMPLE_INTERVAL
 
@@ -71,6 +73,7 @@ def main() -> None:
     signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
 
     store = ProfileStore()
+    _resume_pending_analysis(store)
     try:
         _poll_loop(store)
     finally:
@@ -359,6 +362,38 @@ def _exit_background(app_id: str, profile: GameProfile, stats, store: ProfileSto
     _run_ai_analysis(app_id, profile, stats, store)
 
 
+def _save_pending_analysis(app_id: str, stats) -> None:
+    try:
+        PENDING_PATH.write_text(json.dumps({"app_id": app_id, "stats": asdict(stats)}))
+        logger.info("Deferred Discord post + AI analysis to next startup")
+    except OSError as e:
+        logger.warning(f"Could not save pending analysis: {e}")
+
+
+def _resume_pending_analysis(store: ProfileStore) -> None:
+    if not PENDING_PATH.exists():
+        return
+    try:
+        pending = json.loads(PENDING_PATH.read_text())
+        app_id = pending["app_id"]
+        stats = SessionStats(**pending["stats"])
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        logger.warning(f"Discarding unreadable pending analysis: {e}")
+        PENDING_PATH.unlink(missing_ok=True)
+        return
+    PENDING_PATH.unlink(missing_ok=True)
+    profile = store.get(app_id)
+    if profile is None:
+        return
+    logger.info(f"Resuming deferred analysis for '{profile.game_name}' in {PENDING_DELAY_S}s")
+
+    def run() -> None:
+        time.sleep(PENDING_DELAY_S)
+        _exit_background(app_id, profile, stats, store)
+
+    threading.Thread(target=run, daemon=True).start()
+
+
 def _on_game_exit(app_id: str, store: ProfileStore, notify: bool = True) -> None:
     global _active_monitor
     existing = store.get(app_id)
@@ -386,8 +421,10 @@ def _on_game_exit(app_id: str, store: ProfileStore, notify: bool = True) -> None
         existing.session_count += 1
         store.save()
         logger.info(f"Session ended for '{existing.game_name}' (session #{existing.session_count})")
-        if notify:  # skipped on shutdown: network is going away and daemon threads die with us
+        if notify:
             threading.Thread(target=_exit_background, args=(app_id, existing, stats, store), daemon=True).start()
+        else:  # shutdown: network is going away and daemon threads die with us, so defer to next boot
+            _save_pending_analysis(app_id, stats)
     else:
         existing.session_count += 1
         store.save()
