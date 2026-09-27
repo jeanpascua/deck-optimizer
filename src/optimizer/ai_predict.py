@@ -247,7 +247,7 @@ def _enforce_rules(adjustments: dict, current: dict, stats: dict) -> tuple[dict,
 
 def analyze_session(app_id: str, game_name: str, current_settings: dict,
                     session_stats: dict, sharedeck_data: dict = None,
-                    session_history: list = None) -> dict:
+                    session_history: list = None, settings_are_live: bool = False) -> dict:
     sd_context = ""
     if sharedeck_data and sharedeck_data.get("report_count"):
         sd_context = f"ShareDeck community ({sharedeck_data['report_count']} reports): {json.dumps(sharedeck_data)}"
@@ -259,10 +259,11 @@ def analyze_session(app_id: str, game_name: str, current_settings: dict,
             f"- GPU avg:{s.get('gpu_busy_avg')}% power:{s.get('power_watts_avg')}W "
             f"temp:{s.get('temp_c_avg')}°C fps_avg:{s.get('fps_avg')} "
             f"battery_drain:{s.get('battery_drain_pct')}% duration:{s.get('session_duration_min')}min"
+            + (f" settings:{json.dumps(_normalize_to_menu(s['settings_used']))}" if s.get("settings_used") else "")
             for s in past
         ]
         history_context = (
-            f"Past {len(past)} session(s) on current settings (oldest first, most recent session is "
+            f"Past {len(past)} session(s) (oldest first, most recent session is "
             f"the one being analyzed below):\n" + "\n".join(history_lines) +
             "\n\nUse this trend to judge if past adjustments actually helped — don't repeat a change "
             "that already happened and didn't fix the problem; if the same issue persists across "
@@ -270,6 +271,11 @@ def analyze_session(app_id: str, game_name: str, current_settings: dict,
         )
 
     current_settings = _normalize_to_menu(current_settings)
+    settings_label = (
+        "Settings the user actually ran this session (read from the Deck; the user sets them by hand)"
+        if settings_are_live else "Last recommended settings (what the user actually ran is unknown)"
+    )
+    session_stats = {k: v for k, v in session_stats.items() if k != "settings_used"}
     fps_rules = ""
     if session_stats.get("fps_avg") is not None:
         fps_rules = f"""- fps_avg vs fps_limit: if fps_avg < fps_limit * 0.85, game can't hit target — lower fps_limit or set scaling_filter "sharp"
@@ -280,7 +286,7 @@ def analyze_session(app_id: str, game_name: str, current_settings: dict,
     prompt = f"""You are a Steam Deck optimization expert analyzing a gameplay session.
 
 Game: {game_name}
-Current settings: {json.dumps(current_settings)}
+{settings_label}: {json.dumps(current_settings)}
 Session performance: {json.dumps(session_stats)}
 {history_context}
 {sd_context}

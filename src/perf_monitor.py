@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Performance monitoring during gameplay — GPU, power, temp, battery, FPS."""
 
+import json
 import logging
 import os
 import select
@@ -11,12 +12,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from live_settings import read_live_settings
+
 logger = logging.getLogger(__name__)
 
 GPU_BUSY_PATH = Path("/sys/class/drm/card0/device/gpu_busy_percent")
 BATTERY_CAPACITY_PATH = Path("/sys/class/power_supply/BAT1/capacity")
 BATTERY_VOLTAGE_PATH = Path("/sys/class/power_supply/BAT1/voltage_now")
 BATTERY_CURRENT_PATH = Path("/sys/class/power_supply/BAT1/current_now")
+SETTINGS_SAMPLE_SECONDS = 60  # the user changes menu settings rarely; xprop every poll is wasteful
 THERMAL_PATHS = list(Path("/sys/class/thermal").glob("thermal_zone*/temp"))
 
 
@@ -47,6 +51,7 @@ class SessionStats:
     battery_drain_pct: Optional[int]
     fps_avg: Optional[float]
     fps_min: Optional[float]
+    settings_used: Optional[dict] = None  # Quick Access settings in effect for most of the session
 
 
 def _read_sysfs_float(path: Path) -> Optional[float]:
@@ -193,6 +198,8 @@ class SessionMonitor:
         self._start_iso = datetime.now(timezone.utc).isoformat()
         self._samples: list[PerfSample] = []
         self._battery_start = _read_sysfs_int(BATTERY_CAPACITY_PATH)
+        self._settings_samples: list[str] = []
+        self._last_settings_read = 0.0
         _stats_reader.start()
 
     def sample(self) -> None:
@@ -205,6 +212,11 @@ class SessionMonitor:
             fps=_read_fps(),
         )
         self._samples.append(s)
+        if s.timestamp - self._last_settings_read >= SETTINGS_SAMPLE_SECONDS:
+            self._last_settings_read = s.timestamp
+            live = read_live_settings()
+            if live is not None:
+                self._settings_samples.append(json.dumps(live, sort_keys=True))
 
     def summarize(self) -> SessionStats:
         duration = (time.monotonic() - self._start_time) / 60.0
@@ -236,4 +248,11 @@ class SessionMonitor:
             battery_drain_pct=battery_drain,
             fps_avg=round(sum(fps_vals) / len(fps_vals), 1) if fps_vals else None,
             fps_min=round(min(fps_vals), 1) if fps_vals else None,
+            settings_used=self._settings_used(),
         )
+
+    def _settings_used(self) -> Optional[dict]:
+        if not self._settings_samples:
+            return None
+        most_common = max(set(self._settings_samples), key=self._settings_samples.count)
+        return json.loads(most_common)

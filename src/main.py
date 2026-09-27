@@ -231,6 +231,8 @@ def _notify_discord_session_end(game_name: str, profile: GameProfile, stats) -> 
             fields.append({"name": "Battery", "value": f"`{stats.battery_start_pct}%` → `{stats.battery_end_pct}%` (`-{stats.battery_drain_pct}%`)", "inline": True})
         if stats.fps_avg is not None:
             fields.append({"name": "FPS", "value": f"`avg {stats.fps_avg}` / `min {stats.fps_min}`", "inline": True})
+        if stats.settings_used:
+            fields.append({"name": "Your Settings", "value": _format_live_settings(stats.settings_used), "inline": False})
         fields.append({"name": "Duration", "value": f"`{stats.session_duration_min} min`", "inline": True})
         fields.append({"name": "Samples", "value": f"`{stats.sample_count}`", "inline": True})
 
@@ -245,6 +247,18 @@ def _notify_discord_session_end(game_name: str, profile: GameProfile, stats) -> 
         logger.info(f"Session stats sent for '{game_name}'")
     except Exception as e:
         logger.warning(f"Session Discord notification failed: {e}")
+
+
+def _format_live_settings(s: dict) -> str:
+    parts = [
+        f"Frame Limit `{s['fps_limit'] or 'off'}`",
+        f"TDP `{s['tdp']}W`" if s.get("tdp") else None,
+        f"GPU Clock `{s['gpu_clock']} MHz`" if s.get("gpu_clock") else "GPU Clock `auto`",
+        f"Scaling `{s.get('scaling_mode')}` / `{s.get('scaling_filter')}`"
+        + (f" (sharpness `{s['sharpness']}`)" if s.get("sharpness") is not None else ""),
+        "Tearing `on`" if s.get("allow_tearing") else None,
+    ]
+    return " · ".join(p for p in parts if p)
 
 
 def _send_discord(webhook: str, payload_dict: dict) -> None:
@@ -280,11 +294,14 @@ def _run_ai_analysis(app_id: str, profile: GameProfile, stats, store: ProfileSto
         logger.info(f"Session too short ({stats.session_duration_min}min), skipping AI analysis")
         return
 
-    current_settings = profile_to_settings(profile)
+    # Prefer what the user actually had set (read from the Deck) over our last recommendation
+    live = stats.settings_used
+    current_settings = live if live else profile_to_settings(profile)
+    session_stats = {k: v for k, v in asdict(stats).items() if k != "settings_used"}
     try:
         result = analyze_session(
-            app_id, profile.game_name, current_settings, asdict(stats),
-            session_history=load_sessions(app_id),
+            app_id, profile.game_name, current_settings, session_stats,
+            session_history=load_sessions(app_id), settings_are_live=bool(live),
         )
     except Exception as e:
         logger.warning(f"AI analysis failed for '{profile.game_name}': {e}")
