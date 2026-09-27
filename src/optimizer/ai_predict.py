@@ -174,6 +174,9 @@ def _enforce_rules(adjustments: dict, current: dict, stats: dict) -> tuple[dict,
     bottleneck = gpu is not None and gpu > GPU_BOTTLENECK_PCT
     missing_target = bool(fps_avg and limit) and fps_avg < limit * 0.85
     stutter = bool(fps_avg and fps_min) and fps_min < fps_avg * 0.6
+    # holding target with no heat/drain/GPU pressure: a lone fps_min dip (loading screen) isn't worth
+    # cutting fps or image quality over, so it overrides the stutter/missing-target triggers
+    smooth = bool(fps_avg) and fps_avg >= (limit or 60) * 0.95 and not (hot or fast_drain or bottleneck)
     headroom = bool(fps_avg and limit) and fps_avg > limit * 0.98 and gpu is not None and gpu < GPU_IDLE_PCT
 
     def direction(key, new):
@@ -191,11 +194,13 @@ def _enforce_rules(adjustments: dict, current: dict, stats: dict) -> tuple[dict,
         elif key == "gpu_clock" and d == 1:
             ok = bottleneck and not hot
         elif key == "fps_limit" and d == -1:
-            ok = hot or fast_drain or bottleneck or missing_target or stutter
+            ok = (hot or fast_drain or bottleneck or missing_target or stutter) and not smooth
         elif key == "fps_limit" and d == 1:
             ok = headroom
+        elif key == "fps_limit" and d is None:
+            ok = not smooth  # adding a cap where none was set
         elif key in ("fsr", "half_rate_shading") and new is True and not current.get(key):
-            ok = hot or fast_drain or bottleneck or missing_target or stutter
+            ok = (hot or fast_drain or bottleneck or missing_target or stutter) and not smooth
         else:
             ok = True
         if ok:
